@@ -1,0 +1,6 @@
+{
+  "name": "Gestión de Permisos Alvernia",
+  "description": "Sistema de gestión y reportes para permisos y novedades de los empleados de la Institución Educativa Alvernia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

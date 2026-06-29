@@ -1,0 +1,94 @@
+﻿
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                }`}
+                id="tab-btn-reportes-sidebar"
+              >
+                <FileSpreadsheet className="w-4 h-4 shrink-0" />
+                Reportes Generales
+              </button>
+              
+              <button
+                onClick={() => setActiveTab("matriculas")}
+                className={`w-full px-4 py-3 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-xs text-left uppercase tracking-wider ${
+                  activeTab === "matriculas"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                }`}
+                id="tab-btn-matriculas-sidebar"
+              >
+                <School className="w-4 h-4 shrink-0" />
+                Control de Matrículas
+              </button>
+              
+              <button
+                onClick={() => setActiveTab("certificados")}
+                className={`w-full px-4 py-3 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-xs text-left uppercase tracking-wider ${
+                  activeTab === "certificados"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                }`}
+                id="tab-btn-certificados-sidebar"
+              >
+                <FileCheck className="w-4 h-4 shrink-0" />
+                Certificados Generales
+              </button>
+
+              <button
+                onClick={() => setActiveTab("certificadosPama")}
+                className={`w-full px-4 py-3 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-xs text-left uppercase tracking-wider ${
+                  activeTab === "certificadosPama"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                }`}
+                id="tab-btn-certificadospama-sidebar"
+              >
+                <Award className="w-4 h-4 shrink-0" />
+                Certificados PAMA
+              </button>
+
+              <button
+                onClick={() => setActiveTab("constancias")}
+                className={`w-full px-4 py-3 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-xs text-left uppercase tracking-wider ${
+                  activeTab === "constancias"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                }`}
+                id="tab-btn-constancias-sidebar"
+              >
+                <FilePlus className="w-4 h-4 shrink-0" />
+                Constancias de Estudio
+              </button>
+
+              <div className="pt-4 pb-2 border-t border-slate-700/50 mt-4">
+                <p className="px-4 text-[9px] font-extrabold text-slate-500 uppercase tracking-widest leading-none">
+                  Gestión del Sistema
+                </p>
+              </div>
+              
+              <button
+                onClick={() => setActiveTab("configuracion")}
+                className={`w-full px-4 py-3 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-xs text-left uppercase tracking-wider ${
+                  activeTab === "configuracion"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                }`}
+                id="tab-btn-configuracion-sidebar"
+              >
+                <Settings className="w-4 h-4 shrink-0" />
+                Configuración General
+              </button>
+            </>
+          )}
+        </nav>
+
+        <div className="p-4 border-t border-slate-800 space-y-2 shrink-0">
+          <button
+            onClick={() => handleLogout()}
+            className="w-full flex items-center gap-3 px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors font-semibold text-xs uppercase tracking-wider"
+          >
+            <LogOut className="w-4 h-4" />
+            Cerrar Sesión
+          </button>
+        </div>
+      </aside>
+"@
