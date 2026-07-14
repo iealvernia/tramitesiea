@@ -325,8 +325,8 @@ export default function ConstanciasPanel() {
                 ...student,
                 id: existingData.id
             };
-            const updateRes = await fetch(`/api/constancias/${existingData.id}`, {
-              method: 'PUT',
+            const updateRes = await fetch(`/api/constancias`, {
+              method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });

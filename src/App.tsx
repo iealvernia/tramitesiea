@@ -256,9 +256,9 @@ export default function App() {
     return wasCleared ? [] : INITIAL_NOVEDADES;
   });
 
-  // --- Supabase Synchronization State ---
-  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
-  const [supabaseDbError, setSupabaseDbError] = useState<string>('');
+  // --- CockroachDB Synchronization State ---
+  const [dbSyncStatus, setDbSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const [dbError, setDbError] = useState<string>('');
 
   // --- Evaluación Docente State ---
   // Persistencia local como caché; se sincroniza con CockroachDB al iniciar sesión
@@ -285,36 +285,34 @@ export default function App() {
     }
   };
 
-  const fetchFromSupabase = async () => {
-    setSupabaseSyncStatus('syncing');
+  const fetchFromDb = async () => {
+    setDbSyncStatus('syncing');
     try {
-      const { data: dbEmployees, error: empError } = await supabase
-        .from('employees')
-        .select('*');
-
-      if (empError) {
-        console.error('Error fetching employees from Supabase:', empError);
-        setSupabaseSyncStatus('error');
-        setSupabaseDbError(empError.message || 'Error de conexión');
+      const empRes = await fetch('/api/employees');
+      const empData = await empRes.json();
+      
+      if (!empData.success) {
+        console.warn('Error fetching employees from CockroachDB:', empData.error);
+        setDbSyncStatus('error');
+        setDbError(empData.error || empData.message || 'Error de conexión');
         return;
       }
 
-      const { data: dbNovedades, error: novError } = await supabase
-        .from('novedades')
-        .select('*');
-
-      if (novError) {
-        console.error('Error fetching novedades from Supabase:', novError);
-        setSupabaseSyncStatus('error');
-        setSupabaseDbError(novError.message || 'Error de conexión');
+      const novRes = await fetch('/api/novedades');
+      const novData = await novRes.json();
+      
+      if (!novData.success) {
+        console.warn('Error fetching novedades from CockroachDB:', novData.error);
+        setDbSyncStatus('error');
+        setDbError(novData.error || novData.message || 'Error de conexión');
         return;
       }
 
-      setSupabaseSyncStatus('synced');
-      setSupabaseDbError('');
+      setDbSyncStatus('synced');
+      setDbError('');
 
-      const mappedEmployees = (dbEmployees || []).map(mapDbToEmployee);
-      const mappedNovedades = (dbNovedades || []).map(mapDbToNovedad);
+      const mappedEmployees = (empData.employees || []).map(mapDbToEmployee);
+      const mappedNovedades = (novData.novedades || []).map(mapDbToNovedad);
 
       if (mappedEmployees.length > 0 || mappedNovedades.length > 0) {
         setEmployees(mappedEmployees);
@@ -343,44 +341,49 @@ export default function App() {
         localStorage.setItem('alvernia_employees', JSON.stringify(seedEmployees));
         localStorage.setItem('alvernia_novedades', JSON.stringify(seedNovedades));
 
-        await pushToSupabase(seedEmployees, seedNovedades);
+        await pushToDb(seedEmployees, seedNovedades);
       }
     } catch (e: any) {
-      console.warn('Could not sync from Supabase. Fallback to localStorage.', e);
-      setSupabaseSyncStatus('error');
-      setSupabaseDbError(e.message || 'Error de red inesperado');
+      console.warn('Network error fetching from CockroachDB:', e);
+      setDbSyncStatus('error');
+      setDbError(e.message || 'Error de red');
     }
   };
 
-  const pushToSupabase = async (emps: Employee[], novs: Novedad[]) => {
+  const pushToDb = async (emps: Employee[], novs: Novedad[]) => {
     try {
       if (emps.length > 0) {
-        const payloadEmps = emps.map(mapEmployeeToDb);
-        const { error: empErr } = await supabase
-          .from('employees')
-          .upsert(payloadEmps, { onConflict: 'id' });
-        if (empErr) throw empErr;
+        const resEmps = await fetch('/api/employees/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(emps.map(mapEmployeeToDb))
+        });
+        const dataEmps = await resEmps.json();
+        if (!dataEmps.success) throw new Error(dataEmps.error || 'Error al guardar empleados');
       }
 
       if (novs.length > 0) {
-        const payloadNovs = novs.map(mapNovedadToDb);
-        const { error: novErr } = await supabase
-          .from('novedades')
-          .upsert(payloadNovs, { onConflict: 'id' });
-        if (novErr) throw novErr;
+        const resNovs = await fetch('/api/novedades/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(novs.map(mapNovedadToDb))
+        });
+        const dataNovs = await resNovs.json();
+        if (!dataNovs.success) throw new Error(dataNovs.error || 'Error al guardar novedades');
       }
-      setSupabaseSyncStatus('synced');
-      setSupabaseDbError('');
+      setDbSyncStatus('synced');
+      setDbError('');
     } catch (e: any) {
-      console.error('Failed seeding to Supabase', e);
-      setSupabaseSyncStatus('error');
-      setSupabaseDbError(e.message || 'Error de escritura');
+      console.error('Failed seeding to DB', e);
+      setDbSyncStatus('error');
+      setDbError(e.message || 'Error de escritura');
     }
   };
 
   useEffect(() => {
     if (userSession) {
-      fetchFromSupabase();
+      // Background pull from CockroachDB
+      fetchFromDb();
       fetchDocentesEvaluacion();
     }
   }, [userSession]);
@@ -707,13 +710,6 @@ export default function App() {
         localStorage.setItem('alvernia_employees', '[]');
         localStorage.setItem('alvernia_novedades', '[]');
         localStorage.setItem('alvernia_data_cleared', 'true');
-        // Limpiar también Supabase (fuente remota de empleados/novedades)
-        try {
-          await supabase.from('employees').delete().neq('id', 'placeholder__never_match');
-          await supabase.from('novedades').delete().neq('id', 'placeholder__never_match');
-        } catch (e: any) {
-          console.warn('Could not clear Supabase records:', e);
-        }
       }
 
       if (cleanOptions.docentes_evaluacion) {
@@ -810,21 +806,11 @@ export default function App() {
     });
 
     try {
-      if (importedEmployees.length > 0) {
-        const dbEmps = importedEmployees.map(mapEmployeeToDb);
-        const { error } = await supabase.from('employees').upsert(dbEmps, { onConflict: 'id' });
-        if (error) throw error;
-      }
-      if (importedNovedades.length > 0) {
-        const dbNovs = importedNovedades.map(mapNovedadToDb);
-        const { error } = await supabase.from('novedades').upsert(dbNovs, { onConflict: 'id' });
-        if (error) throw error;
-      }
-      setSupabaseSyncStatus('synced');
+      await pushToDb(importedEmployees, importedNovedades);
     } catch (e: any) {
-      console.warn('Could not save imported excel records to Supabase:', e);
-      setSupabaseSyncStatus('error');
-      setSupabaseDbError(e.message || 'Error de red al importar');
+      console.warn('Could not save imported excel records to DB:', e);
+      setDbSyncStatus('error');
+      setDbError(e.message || 'Error de red al importar');
     }
 
     showToast(`Se han importado exitosamente ${importedEmployees.length} empleados de la base de datos.`);
@@ -848,15 +834,18 @@ export default function App() {
       const targetEmp = updatedEmp as Employee;
       showToast(`Empleado ${targetEmp.nombre} ahora está ${targetEmp.activo ? 'ACTIVO' : 'INHABILITADO'}`);
       try {
-        const { error } = await supabase
-          .from('employees')
-          .upsert(mapEmployeeToDb(targetEmp), { onConflict: 'id' });
-        if (error) throw error;
-        setSupabaseSyncStatus('synced');
+        const res = await fetch('/api/employees/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([mapEmployeeToDb(targetEmp)])
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error de base de datos');
+        setDbSyncStatus('synced');
       } catch (e: any) {
-        console.warn('Could not update active state of employee in Supabase:', e);
-        setSupabaseSyncStatus('error');
-        setSupabaseDbError(e.message || 'Error de red al alternar activo');
+        console.warn('Could not update active state of employee in DB:', e);
+        setDbSyncStatus('error');
+        setDbError(e.message || 'Error de red al alternar activo');
       }
     }
   };
@@ -903,15 +892,18 @@ export default function App() {
     if (editingEmployeeId) {
       setEmployees(prev => prev.map(emp => emp.cedula === editingEmployeeId ? newEmployee : emp));
       try {
-        const { error } = await supabase
-          .from('employees')
-          .upsert(mapEmployeeToDb(newEmployee), { onConflict: 'id' });
-        if (error) throw error;
-        setSupabaseSyncStatus('synced');
+        const res = await fetch('/api/employees/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([mapEmployeeToDb(newEmployee)])
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error de base de datos');
+        setDbSyncStatus('synced');
       } catch (e: any) {
-        console.warn('Could not update employee in Supabase:', e);
-        setSupabaseSyncStatus('error');
-        setSupabaseDbError(e.message || 'Error de red al actualizar docente');
+        console.warn('Could not update employee in DB:', e);
+        setDbSyncStatus('error');
+        setDbError(e.message || 'Error de red al actualizar docente');
       }
       showToast(`Se actualizó correctamente al empleado ${newEmployee.nombre}`);
     } else {
@@ -920,15 +912,18 @@ export default function App() {
       localStorage.removeItem('alvernia_data_cleared');
 
       try {
-        const { error } = await supabase
-          .from('employees')
-          .insert([mapEmployeeToDb(newEmployee)]);
-        if (error) throw error;
-        setSupabaseSyncStatus('synced');
+        const res = await fetch('/api/employees/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([mapEmployeeToDb(newEmployee)])
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error de base de datos');
+        setDbSyncStatus('synced');
       } catch (e: any) {
-        console.warn('Could not insert new employee in Supabase:', e);
-        setSupabaseSyncStatus('error');
-        setSupabaseDbError(e.message || 'Error de red al guardar docente');
+        console.warn('Could not insert new employee in DB:', e);
+        setDbSyncStatus('error');
+        setDbError(e.message || 'Error de red al guardar docente');
       }
       showToast(`Se registró correctamente al empleado ${newEmployee.nombre}`);
     }
@@ -946,14 +941,14 @@ export default function App() {
       setNovedades(prev => prev.filter(n => n.empleadoId !== cedula));
 
       try {
-        const { error: err1 } = await supabase.from('employees').delete().eq('id', cedula);
-        const { error: err2 } = await supabase.from('novedades').delete().eq('empleado_id', cedula);
-        if (err1 || err2) throw (err1 || err2);
-        setSupabaseSyncStatus('synced');
+        const res = await fetch(`/api/employees/${cedula}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error de base de datos');
+        setDbSyncStatus('synced');
       } catch (e: any) {
-        console.warn('Could not delete employee and associated novedades from Supabase:', e);
-        setSupabaseSyncStatus('error');
-        setSupabaseDbError(e.message || 'Error de red al borrar docente');
+        console.warn('Could not delete employee and associated novedades from DB:', e);
+        setDbSyncStatus('error');
+        setDbError(e.message || 'Error de red al borrar docente');
       }
 
       showToast('Se ha eliminado militarmente el registro del funcionario.');
@@ -1008,15 +1003,18 @@ export default function App() {
     setNovedades(prev => [newNovelty, ...prev]);
 
     try {
-      const { error } = await supabase
-        .from('novedades')
-        .insert([mapNovedadToDb(newNovelty)]);
-      if (error) throw error;
-      setSupabaseSyncStatus('synced');
+      const res = await fetch('/api/novedades/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([mapNovedadToDb(newNovelty)])
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Error de base de datos');
+      setDbSyncStatus('synced');
     } catch (e: any) {
-      console.warn('Could not insert new novelty in Supabase:', e);
-      setSupabaseSyncStatus('error');
-      setSupabaseDbError(e.message || 'Error de red al guardar novedad');
+      console.warn('Could not insert new novelty in DB:', e);
+      setDbSyncStatus('error');
+      setDbError(e.message || 'Error de red al guardar novedad');
     }
 
     showToast(`Se ha registrado de forma exitosa la novedad: "${newNovelty.claseNovedad}" para ${selectedEmployee.nombre}`);
@@ -1034,13 +1032,14 @@ export default function App() {
       setNovedades(prev => prev.filter(n => n.id !== id));
 
       try {
-        const { error } = await supabase.from('novedades').delete().eq('id', id);
-        if (error) throw error;
-        setSupabaseSyncStatus('synced');
+        const res = await fetch(`/api/novedades/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error de base de datos');
+        setDbSyncStatus('synced');
       } catch (e: any) {
-        console.warn('Could not delete novelty from Supabase:', e);
-        setSupabaseSyncStatus('error');
-        setSupabaseDbError(e.message || 'Error de red al borrar novedad');
+        console.warn('Could not delete novelty from DB:', e);
+        setDbSyncStatus('error');
+        setDbError(e.message || 'Error de red al borrar novedad');
       }
 
       showToast('La novedad ha sido eliminada.');
@@ -2884,9 +2883,9 @@ export default function App() {
                 }}
                 showToast={showToast}
                 onResetAllData={() => setConfirmResetOpen(true)}
-                supabaseSyncStatus={supabaseSyncStatus}
-                supabaseDbError={supabaseDbError}
-                fetchFromSupabase={fetchFromSupabase}
+                supabaseSyncStatus={dbSyncStatus}
+                supabaseDbError={dbError}
+                fetchFromSupabase={fetchFromDb}
               />
             </motion.div>
           )}
