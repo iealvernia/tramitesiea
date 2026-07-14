@@ -1615,8 +1615,15 @@ const genericCRUD = (route: string, tableName: string) => {
       }
 
       if (!isUpdate) {
-        // Ensure we have an id if none was provided but we are inserting
-        if (!data.id) data.id = crypto.randomUUID();
+        // Ensure we have an id if none was provided but we are inserting (only for non-serial tables)
+        const serialTables = ['alvernia_matriculas', 'alvernia_constancias', 'alvernia_consecutivos_oficios', 'alvernia_evaluaciones_1278', 'alvernia_docentes_evaluacion', 'alvernia_novedades', 'alvernia_actas_generales', 'alvernia_actas_seguimiento', 'alvernia_agenda_eventos', 'alvernia_tipos_oficio', 'alvernia_responsables', 'alvernia_admins'];
+        
+        if (!data.id && !serialTables.includes(tableName)) {
+          data.id = crypto.randomUUID();
+        } else if (!data.id) {
+          delete data.id; // ensure it is not inserted as undefined
+        }
+
         const columns = Object.keys(data).join(", ");
         const values = Object.values(data);
         const placeholders = values.map((_, i) => `$${i + 1}`).join(", ");

@@ -60,7 +60,7 @@ export default function ConstanciasPanel() {
   const [errorMsg, setErrorErrorMsg] = useState<string | null>(null);
 
   // Filters
-  const [selectedAnio, setSelectedAnio] = useState('2025');
+  const [selectedAnio, setSelectedAnio] = useState(new Date().getFullYear().toString());
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modal / Form state
@@ -84,7 +84,7 @@ export default function ConstanciasPanel() {
   });
 
   const [formState, setFormState] = useState<StudentConstancia>({
-    anio: '2025',
+    anio: new Date().getFullYear().toString(),
     tipo_documento: 'RC',
     documento: '',
     nombre_completo: '',
