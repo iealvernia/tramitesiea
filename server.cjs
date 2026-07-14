@@ -153,9 +153,9 @@ async function ensureDbTables() {
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS calendario TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS footer_motto TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS footer_address TEXT;
-      ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS footer_emails TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS footer_website TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS footer_city TEXT;
+      ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS ihs_config JSONB;
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS alvernia_novedades (
@@ -378,6 +378,28 @@ async function ensureDbTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS alvernia_admins (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    const { rows: admins } = await client.query("SELECT id, email FROM alvernia_admins LIMIT 1");
+    if (admins.length === 0) {
+      const defaultEmail = "matriculas@alvernia.com";
+      const defaultPassword = "admin";
+      const hash = import_crypto.default.createHash("sha256").update(defaultPassword).digest("hex");
+      await client.query(
+        "INSERT INTO alvernia_admins (id, email, password_hash) VALUES ($1, $2, $3)",
+        [import_crypto.default.randomUUID(), defaultEmail, hash]
+      );
+      console.log("Seeded default admin user");
+    } else if (admins[0].email === "osjuliansc@gmail.com") {
+      await client.query("UPDATE alvernia_admins SET email = 'matriculas@alvernia.com' WHERE email = 'osjuliansc@gmail.com'");
+      console.log("Updated default admin email to matriculas@alvernia.com");
+    }
     console.log("CockroachDB tables are verified/created successfully.");
   } catch (err) {
     console.error("Error ensuring CockroachDB tables:", err);
@@ -418,6 +440,24 @@ function getS3Client() {
   }
   return s3Client;
 }
+app.post("/api/login", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(500).json({ error: "Database not connected" });
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Email y contrase\xF1a son requeridos" });
+  try {
+    const hash = import_crypto.default.createHash("sha256").update(password).digest("hex");
+    const { rows } = await pool.query("SELECT * FROM alvernia_admins WHERE email = $1 AND password_hash = $2", [email, hash]);
+    if (rows.length > 0) {
+      return res.json({ success: true, user: { email: rows[0].email } });
+    } else {
+      return res.status(401).json({ error: "Credenciales inv\xE1lidas" });
+    }
+  } catch (err) {
+    console.error("Login error:", err);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
 app.get("/api/health", async (req, res) => {
   const dbConfigured = !!process.env.COCKROACH_DB_URL;
   const r2Configured = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME);
@@ -1242,6 +1282,7 @@ app.get("/api/alvernia/config", async (req, res) => {
           footerEmails: row.footer_emails,
           footerWebsite: row.footer_website,
           footerCity: row.footer_city,
+          ihsConfig: typeof row.ihs_config === "string" ? JSON.parse(row.ihs_config) : row.ihs_config,
           habilitationDates: typeof row.habilitation_dates === "string" ? JSON.parse(row.habilitation_dates) : row.habilitation_dates
         }
       });
@@ -1280,6 +1321,7 @@ app.post("/api/alvernia/config", async (req, res) => {
     rectorCargo,
     rectorSignature,
     logoBase64,
+    ihsConfig,
     habilitationDates
   } = req.body;
   try {
@@ -1317,8 +1359,8 @@ app.post("/api/alvernia/config", async (req, res) => {
         id, app_name, institution_name, institution_dane, institution_nit, educational_level, calendario,
         footer_motto, footer_address, footer_emails, footer_website, footer_city,
         rector_name, rector_document, rector_document_expedition, rector_cargo, rector_signature, 
-        logo_base64, habilitation_dates, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP)
+        logo_base64, ihs_config, habilitation_dates, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP)
       ON CONFLICT (id) DO UPDATE SET
         app_name = EXCLUDED.app_name,
         institution_name = EXCLUDED.institution_name,
@@ -1337,6 +1379,7 @@ app.post("/api/alvernia/config", async (req, res) => {
         rector_cargo = EXCLUDED.rector_cargo,
         rector_signature = EXCLUDED.rector_signature,
         logo_base64 = EXCLUDED.logo_base64,
+        ihs_config = EXCLUDED.ihs_config,
         habilitation_dates = EXCLUDED.habilitation_dates,
         updated_at = CURRENT_TIMESTAMP
     `, [
@@ -1358,7 +1401,8 @@ app.post("/api/alvernia/config", async (req, res) => {
       rectorCargo || null,
       signatureUrl || null,
       logoBase64 || null,
-      JSON.stringify(habilitationDates || {})
+      ihsConfig ? JSON.stringify(ihsConfig) : null,
+      habilitationDates ? JSON.stringify(habilitationDates) : null
     ]);
     res.json({
       success: true,
