@@ -366,48 +366,52 @@ export default function CertificadosPanel() {
     const allJson = await allRes.json();
     const existingList = allJson.data || [];
 
-    for (let i = 0; i < finalStudents.length; i++) {
-      const student = finalStudents[i];
-      try {
-        const existingData = existingList.find((s: any) => 
-          s.anio === student.anio && 
-          s.grado === student.grado && 
-          s.nombre === student.nombre
-        );
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < finalStudents.length; i += CHUNK_SIZE) {
+      const chunk = finalStudents.slice(i, i + CHUNK_SIZE);
+      
+      await Promise.all(chunk.map(async (student) => {
+        try {
+          const existingData = existingList.find((s: any) => 
+            s.anio === student.anio && 
+            s.grado === student.grado && 
+            s.nombre === student.nombre
+          );
 
-        if (existingData && existingData.id) {
-          const payload = {
-              id: existingData.id,
-              nombre: student.nombre,
-              tipo_documento: student.tipo_documento,
-              grado: student.grado,
-              jornada: student.jornada,
-              comportamiento: student.comportamiento,
-              notas: student.notas
-          };
-          const updateRes = await fetch('/api/certificados', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          const updateJson = await updateRes.json();
-          if (updateJson.error) throw new Error(updateJson.error);
-        } else {
-          const insertRes = await fetch('/api/certificados', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(student)
-          });
-          const insertJson = await insertRes.json();
-          if (insertJson.error) throw new Error(insertJson.error);
+          if (existingData && existingData.id) {
+            const payload = {
+                id: existingData.id,
+                nombre: student.nombre,
+                tipo_documento: student.tipo_documento,
+                grado: student.grado,
+                jornada: student.jornada,
+                comportamiento: student.comportamiento,
+                notas: student.notas
+            };
+            const updateRes = await fetch('/api/certificados', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const updateJson = await updateRes.json();
+            if (updateJson.error) throw new Error(updateJson.error);
+          } else {
+            const insertRes = await fetch('/api/certificados', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(student)
+            });
+            const insertJson = await insertRes.json();
+            if (insertJson.error) throw new Error(insertJson.error);
+          }
+          successCount++;
+        } catch (err: any) {
+          console.error('Error importing:', student.nombre, err);
+          errorCount++;
         }
-        successCount++;
-      } catch (err: any) {
-        console.error('Error importing:', student.nombre, err);
-        errorCount++;
-      }
+      }));
 
-      setImportingState(prev => ({ ...prev, progress: i + 1 }));
+      setImportingState(prev => ({ ...prev, progress: Math.min(i + CHUNK_SIZE, finalStudents.length) }));
     }
 
     alert(`Importación Finalizada:\n✅ ${successCount} registros guardados (creados o actualizados)\n❌ ${errorCount} errores.`);

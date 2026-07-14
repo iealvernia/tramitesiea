@@ -309,42 +309,46 @@ export default function ConstanciasPanel() {
     let successCount = 0;
     let errorCount = 0;
 
-    for (let i = 0; i < importingState.students.length; i++) {
-      const student = importingState.students[i];
-      try {
-        const existingData = students.find((s: any) => 
-          s.anio === student.anio && 
-          s.documento === student.documento
-        );
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < importingState.students.length; i += CHUNK_SIZE) {
+      const chunk = importingState.students.slice(i, i + CHUNK_SIZE);
+      
+      await Promise.all(chunk.map(async (student) => {
+        try {
+          const existingData = students.find((s: any) => 
+            s.anio === student.anio && 
+            s.documento === student.documento
+          );
 
-        if (existingData && existingData.id) {
-          const payload = {
-              ...student,
-              id: existingData.id
-          };
-          const updateRes = await fetch(`/api/constancias/${existingData.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          const updateJson = await updateRes.json();
-          if (updateJson.error) throw new Error(updateJson.error);
-        } else {
-          const insertRes = await fetch('/api/constancias', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(student)
-          });
-          const insertJson = await insertRes.json();
-          if (insertJson.error) throw new Error(insertJson.error);
+          if (existingData && existingData.id) {
+            const payload = {
+                ...student,
+                id: existingData.id
+            };
+            const updateRes = await fetch(`/api/constancias/${existingData.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const updateJson = await updateRes.json();
+            if (updateJson.error) throw new Error(updateJson.error);
+          } else {
+            const insertRes = await fetch('/api/constancias', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(student)
+            });
+            const insertJson = await insertRes.json();
+            if (insertJson.error) throw new Error(insertJson.error);
+          }
+          successCount++;
+        } catch (err: any) {
+          console.error('Error importing:', student.nombre_completo, err);
+          errorCount++;
         }
-        successCount++;
-      } catch (err: any) {
-        console.error('Error importing:', student.nombre_completo, err);
-        errorCount++;
-      }
+      }));
 
-      setImportingState(prev => ({ ...prev, progress: i + 1 }));
+      setImportingState(prev => ({ ...prev, progress: Math.min(i + CHUNK_SIZE, importingState.students.length) }));
     }
 
     alert(`Importación Finalizada:\n✅ ${successCount} registros guardados\n❌ ${errorCount} errores.`);
