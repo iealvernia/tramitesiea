@@ -419,7 +419,7 @@ const handlePrint = async (s: StudentMatricula) => {
     drawRow(startY + 52.5, [
       { lbl: "INSTITUCIÓN ANTERIOR", val: val(s.institucionAnterior) || '-', w: 2 },
       { lbl: "GRADOS", val: val(s.grados) || 'NO APLICA', w: 1 },
-      { lbl: "CORREO ESTUDIANTE", val: val(s.correoElectronico) || val(s.numeroDocumento) + '@alvernia.edu.co', w: 2 }
+      { lbl: "CORREO ESTUDIANTE", val: val(s.correoEstudiante) || val(s.numeroDocumento) + '@alvernia.edu.co', w: 2 }
     ]);
 
     // 3. DATOS DEL ACUDIENTE

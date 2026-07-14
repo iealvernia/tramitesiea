@@ -10,9 +10,25 @@ export const supabase = {
     signOut: async () => ({ error: null })
   },
   from: (table: string) => ({
-    select: () => ({ limit: () => ({ data: null, error: null }), eq: () => ({ data: null, error: null }) }),
-    upsert: async () => ({ data: null, error: null }),
-    delete: () => ({ eq: async () => ({ data: null, error: null }) }),
-    insert: async () => ({ data: null, error: null })
+    select: (...args: any[]) => ({ 
+      limit: (...args: any[]) => ({ data: null, error: null }), 
+      eq: (...args: any[]) => ({ data: null, error: null }),
+      neq: (...args: any[]) => ({ data: null, error: null }),
+      in: (...args: any[]) => ({ data: null, error: null }),
+      order: (...args: any[]) => ({ data: null, error: null }),
+      data: null as any,
+      error: null as any
+    }),
+    upsert: async (...args: any[]) => ({ data: null, error: null }),
+    delete: (...args: any[]) => ({ 
+      eq: async (...args: any[]) => ({ data: null, error: null }),
+      neq: async (...args: any[]) => ({ data: null, error: null }),
+      in: async (...args: any[]) => ({ data: null, error: null })
+    }),
+    insert: async (...args: any[]) => ({ data: null, error: null }),
+    update: async (...args: any[]) => ({
+      eq: async (...args: any[]) => ({ data: null, error: null }),
+      neq: async (...args: any[]) => ({ data: null, error: null })
+    })
   })
 };

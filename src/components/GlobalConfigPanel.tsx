@@ -168,6 +168,7 @@ export default function GlobalConfigPanel() {
     rectorCargo?: string;
     logoBase64?: string;
     rectorSignature?: string;
+    ihsConfig?: { [subject: string]: string };
   }) => {
     try {
       // Prioritize incoming updates, next fallback to state variables, next to localStorage, final to default factory parameters
@@ -202,6 +203,10 @@ export default function GlobalConfigPanel() {
       const finalSignature = updatedFields.rectorSignature !== undefined 
         ? updatedFields.rectorSignature 
         : (signatureBase64 || localStorage.getItem('iea_custom_signature') || '');
+
+      const finalIhsConfig = updatedFields.ihsConfig !== undefined
+        ? updatedFields.ihsConfig
+        : (ihsConfig || JSON.parse(localStorage.getItem('iea_ihs_config') || '{}'));
 
       const updateData = {
         appName: finalAppName,

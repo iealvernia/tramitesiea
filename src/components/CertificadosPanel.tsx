@@ -340,7 +340,7 @@ export default function CertificadosPanel() {
       const updatedNotas: Record<string, NotaDetalle> = {};
       Object.entries(student.notas).forEach(([subj, detalle]) => {
         updatedNotas[subj] = {
-          ...detalle,
+          ...(typeof detalle === 'object' && detalle !== null ? (detalle as NotaDetalle) : { valor: String(detalle), nota: String(detalle), desempeno: '' }),
           // Prefer newly edited mapping in the UI; fallback to global config
           ihs: importIhsMap[subj] || globalIhs[subj] || ''
         };
