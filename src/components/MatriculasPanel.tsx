@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 // @ts-ignore
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
 
 interface StudentMatricula {
   id?: string;
@@ -255,12 +256,10 @@ export default function MatriculasPanel({ showToast }: { showToast?: (msg: strin
   };
 
   // Generate gorgeous ficha PDF using html2pdf
-import { jsPDF } from 'jspdf';
 
 const handlePrint = async (s: StudentMatricula) => {
     if (showToast) showToast('Generando Ficha de Matrícula...');
     
-    // Use native jsPDF for instant, lag-free PDF generation
     const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' });
     const val = (v: any) => (v || "").toString().toUpperCase();
     
@@ -269,205 +268,362 @@ const handlePrint = async (s: StudentMatricula) => {
     const textColor = [51, 65, 85]; // #334155
     
     // Helpers
-    const drawSectionTitle = (y: number, title: string) => {
-      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.rect(10, y, 196, 6, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.text(title, 108, y + 4.5, { align: "center" });
-    };
-    
-    const drawField = (x: number, y: number, w: number, h: number, label: string, value: string) => {
+    const drawSection = (y: number, height: number, title: string) => {
+      // Outer outline box
       doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.rect(x, y, w, h);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(10, y, 195, height, 1.5, 1.5);
+      
+      // Header background
       doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.rect(x, y, w, 4, 'F');
+      doc.roundedRect(10, y, 195, 5, 1.5, 1.5, 'F');
+      doc.rect(10, y + 2.5, 195, 2.5, 'F'); // square bottom corners
+      
+      // Header text
       doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7);
-      doc.text(label, x + (w/2), y + 3, { align: "center" });
-      doc.setTextColor(textColor[0], textColor[1], textColor[2]);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      // center value
-      const splitVal = doc.splitTextToSize(value, w - 2);
-      doc.text(splitVal, x + (w/2), y + 8, { align: "center" });
+      doc.text(title, 107.5, y + 3.5, { align: "center" });
     };
 
-    // Header
+    const drawHalfSection = (x: number, y: number, w: number, h: number, title: string) => {
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(x, y, w, h, 1.5, 1.5);
+      
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text(title, x + w/2, y + 4, { align: "center" });
+      
+      doc.line(x, y + 6, x + w, y + 6);
+    };
+
+    const drawField = (x: number, y: number, w: number, h: number, label: string, value: string) => {
+      // Label above box
+      doc.setTextColor(30, 40, 50); // Negro suave que concuerda con la ficha
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(5.5);
+      doc.text(label, x + (w/2), y + 2.5, { align: "center" });
+      
+      // Box
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(x, y + 3, w, h - 3, 1.5, 1.5);
+      
+      // Centered value
+      doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      const splitVal = doc.splitTextToSize(value, w - 2);
+      doc.text(splitVal, x + (w/2), y + 7.5, { align: "center" });
+    };
+
+    const drawRow = (y: number, fields: {lbl: string, val: string, w: number}[]) => {
+      const startX = 12;
+      const totalW = 191;
+      const gap = 2; // Exact gap for uniform distribution
+      const baseUnit = (totalW - (4 * gap)) / 5; // 5 column strict layout
+      
+      let currentX = startX;
+      fields.forEach(f => {
+        const w = (f.w * baseUnit) + ((f.w - 1) * gap);
+        drawField(currentX, y, w, 10, f.lbl, f.val);
+        currentX += w + gap;
+      });
+    };
+
+    // --- Header ---
     const customLogoBase64 = localStorage.getItem('iea_custom_logo') || '';
     if (customLogoBase64) {
-      try { doc.addImage(customLogoBase64, "PNG", 10, 10, 20, 20); } catch(e){}
+      try { doc.addImage(customLogoBase64, "PNG", 14, 6, 18, 21); } catch(e){}
     } else {
       doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.circle(20, 20, 10);
+      doc.circle(23, 16, 10);
       doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
       doc.setFontSize(12);
-      doc.text("ALV", 20, 21.5, { align: "center" });
+      doc.text("ALV", 23, 17.5, { align: "center" });
     }
     
     doc.setTextColor(30, 58, 138); // #1e3a8a
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("INSTITUCIÓN EDUCATIVA ALVERNIA", 108, 15, { align: "center" });
+    doc.setFontSize(13);
+    doc.text("INSTITUCIÓN EDUCATIVA ALVERNIA", 104, 12, { align: "center" });
     
     doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-    doc.setFontSize(8);
-    doc.text("NIVEL PREESCOLAR - BÁSICA PRIMARIA Y MEDIA ACADÉMICA", 108, 20, { align: "center" });
-    doc.text("CALENDARIO A - CÓDIGO DANE 186568000567 NIT. 891201897-5", 108, 24, { align: "center" });
-    doc.text("Dirección: Calle 16 Nro. 12-77 • B/ San Martín • Tel. 4227048", 108, 28, { align: "center" });
+    doc.setFontSize(7);
+    doc.text("NIVEL PREESCOLAR - BÁSICA PRIMARIA Y MEDIA ACADÉMICA", 104, 16, { align: "center" });
+    doc.text("CALENDARIO A - CÓDIGO DANE 186568000567 NIT. 891201897-5", 104, 19.5, { align: "center" });
+    doc.text("Dirección: Calle 16 Nro. 12-77 • B/ San Martín • Tel. 4227048", 104, 23, { align: "center" });
     
+    // Ficha pill
     doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.roundedRect(88, 30, 40, 5, 2, 2, 'F');
+    doc.roundedRect(64, 25, 80, 6, 3, 3, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.text("FICHA DE MATRÍCULA", 108, 33.5, { align: "center" });
+    doc.setFontSize(9);
+    doc.text("FICHA DE MATRÍCULA", 104, 29.2, { align: "center" });
     
     // Foto Box
     doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.roundedRect(180, 10, 26, 30, 1, 1);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(182, 6, 23, 26, 1.5, 1.5); // Movido un poco hacia arriba para no pegarse al cuadro de abajo
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.text("FOTO", 193, 26, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("FOTO", 193.5, 20.5, { align: "center" });
 
+    // --- Sections ---
+    
     // 1. DATOS DE MATRÍCULA
-    let startY = 45;
-    drawSectionTitle(startY, "DATOS DE MATRÍCULA");
-    drawField(10, startY + 7, 39, 12, "SEDE", val(s.sede));
-    drawField(49, startY + 7, 39, 12, "NIVEL EDUCATIVO", val(s.nivelEducativo));
-    drawField(88, startY + 7, 39, 12, "GRADO", val(s.grado));
-    drawField(127, startY + 7, 39, 12, "JORNADA", val(s.jornada));
-    drawField(166, startY + 7, 40, 12, "FECHA MATRÍCULA", val(s.fechaMatricula));
+    let startY = 35;
+    drawSection(startY, 18, "DATOS DE MATRÍCULA");
+    drawRow(startY + 6.5, [
+      { lbl: "SEDE", val: val(s.sede), w: 1 },
+      { lbl: "NIVEL EDUCATIVO", val: val(s.nivelEducativo), w: 1 },
+      { lbl: "GRADO", val: val(s.grado), w: 1 },
+      { lbl: "JORNADA", val: val(s.jornada), w: 1 },
+      { lbl: "FECHA MATRÍCULA", val: val(s.fechaMatricula), w: 1 }
+    ]);
 
     // 2. DATOS DEL ESTUDIANTE
-    startY = 68;
-    drawSectionTitle(startY, "DATOS DEL ESTUDIANTE");
-    drawField(10, startY + 7, 39, 12, "PRIMER APELLIDO", val(s.primerApellido));
-    drawField(49, startY + 7, 39, 12, "SEGUNDO APELLIDO", val(s.segundoApellido) || '-');
-    drawField(88, startY + 7, 39, 12, "PRIMER NOMBRE", val(s.primerNombre));
-    drawField(127, startY + 7, 39, 12, "SEGUNDO NOMBRE", val(s.segundoNombre) || '-');
-    drawField(166, startY + 7, 40, 12, "TIPO DOC.", val(s.tipoDocumento));
-    
-    drawField(10, startY + 20, 39, 12, "NRO DOC.", val(s.numeroDocumento));
-    drawField(49, startY + 20, 39, 12, "FECHA NAC.", val(s.fechaNacimiento));
-    drawField(88, startY + 20, 39, 12, "SEXO", val(s.sexo));
-    drawField(127, startY + 20, 39, 12, "ESTRATO", val(s.estrato) || '-');
-    drawField(166, startY + 20, 40, 12, "TIPO DE SANGRE", val(s.tipoSangre) || '-');
-    
-    drawField(10, startY + 33, 39, 12, "MUNICIPIO", val(s.municipioResidencia));
-    drawField(49, startY + 33, 39, 12, "DIRECCIÓN", val(s.direccionResidencia) || '-');
-    drawField(88, startY + 33, 39, 12, "TELÉFONO", val(s.telefonoCelular) || '-');
-    drawField(127, startY + 33, 39, 12, "EPS", val(s.epsAfiliacion) || '-');
-    drawField(166, startY + 33, 40, 12, "GRUPO ÉTNICO", val(s.grupoEtnico) || 'NINGUNO');
-
-    drawField(10, startY + 46, 39, 12, "CON QUIÉN VIVE", val(s.viveCon) || 'PADRES');
-    drawField(49, startY + 46, 39, 12, "REPITENTE", val(s.repitente) || 'NO');
-    drawField(88, startY + 46, 39, 12, "DISCAPACIDAD", val(s.discapacidad) || 'NINGUNA');
-    drawField(127, startY + 46, 79, 12, "ESTUDIO ANTERIOR (AÑOS)", val(s.estudioAnterior) || '-');
-
-    drawField(10, startY + 59, 117, 12, "INSTITUCIÓN DONDE ESTUDIÓ EL AÑO ANTERIOR", val(s.institucionAnterior) || '-');
-    drawField(127, startY + 59, 39, 12, "N° HERMANOS", val(s.numHermanos) || '-');
-    drawField(166, startY + 59, 40, 12, "GRADOS QUE CURSAN", val(s.grados) || '-');
+    startY = 55;
+    drawSection(startY, 64, "DATOS DEL ESTUDIANTE");
+    drawRow(startY + 6.5, [
+      { lbl: "PRIMER APELLIDO", val: val(s.primerApellido), w: 1 },
+      { lbl: "SEGUNDO APELLIDO", val: val(s.segundoApellido) || '-', w: 1 },
+      { lbl: "PRIMER NOMBRE", val: val(s.primerNombre), w: 1 },
+      { lbl: "SEGUNDO NOMBRE", val: val(s.segundoNombre) || '-', w: 1 },
+      { lbl: "TIPO DOC.", val: val(s.tipoDocumento), w: 1 }
+    ]);
+    drawRow(startY + 18, [
+      { lbl: "NRO DOC.", val: val(s.numeroDocumento), w: 1 },
+      { lbl: "FECHA NAC.", val: val(s.fechaNacimiento), w: 1 },
+      { lbl: "SEXO", val: val(s.sexo), w: 1 },
+      { lbl: "ESTRATO", val: val(s.estrato) || '-', w: 1 },
+      { lbl: "TIPO DE SANGRE", val: val(s.tipoSangre) || '-', w: 1 }
+    ]);
+    drawRow(startY + 29.5, [
+      { lbl: "MUNICIPIO", val: val(s.municipioResidencia), w: 1 },
+      { lbl: "DIRECCIÓN", val: val(s.direccionResidencia) || '-', w: 1 },
+      { lbl: "TELÉFONO", val: val(s.telefonoCelular) || '-', w: 1 },
+      { lbl: "EPS", val: val(s.epsAfiliacion) || '-', w: 1 },
+      { lbl: "GRUPO ÉTNICO", val: val(s.grupoEtnico) || 'NINGUNO', w: 1 }
+    ]);
+    drawRow(startY + 41, [
+      { lbl: "CON QUIÉN VIVE", val: val(s.viveCon) || 'PADRES', w: 1 },
+      { lbl: "REPITENTE", val: val(s.repitente) || 'NO', w: 1 },
+      { lbl: "DISCAPACIDAD", val: val(s.discapacidad) || 'NINGUNA', w: 1 },
+      { lbl: "ESTUDIÓ AÑO ANT.", val: val(s.estudioAnterior) ? 'SÍ' : 'NO', w: 1 },
+      { lbl: "N° HERMANOS/AS", val: val(s.numHermanos) || 'NO APLICA', w: 1 }
+    ]);
+    drawRow(startY + 52.5, [
+      { lbl: "INSTITUCIÓN ANTERIOR", val: val(s.institucionAnterior) || '-', w: 2 },
+      { lbl: "GRADOS", val: val(s.grados) || 'NO APLICA', w: 1 },
+      { lbl: "CORREO ESTUDIANTE", val: val(s.correoElectronico) || val(s.numeroDocumento) + '@alvernia.edu.co', w: 2 }
+    ]);
 
     // 3. DATOS DEL ACUDIENTE
-    startY = 143;
-    drawSectionTitle(startY, "DATOS DEL ACUDIENTE");
-    drawField(10, startY + 7, 39, 12, "PRIMER APELLIDO", val(s.acudienteApellidos?.split(' ')[0]) || val(s.acudienteApellidos));
-    drawField(49, startY + 7, 39, 12, "SEGUNDO APELLIDO", val(s.acudienteApellidos?.split(' ').slice(1).join(' ')) || '-');
-    drawField(88, startY + 7, 39, 12, "NOMBRES", val(s.acudienteNombres));
-    drawField(127, startY + 7, 39, 12, "CÉDULA", val(s.acudienteDocumento));
-    drawField(166, startY + 7, 40, 12, "TELÉFONO", val(s.acudienteTelefono));
-
-    drawField(10, startY + 20, 39, 12, "MUNICIPIO", val(s.acudienteMunicipio) || 'PUERTO ASÍS');
-    drawField(49, startY + 20, 78, 12, "DIRECCIÓN", val(s.acudienteDireccion) || '-');
-    drawField(127, startY + 20, 39, 12, "PARENTESCO", val(s.acudienteParentesco) || '-');
-    drawField(166, startY + 20, 40, 12, "PROFESIÓN", val(s.acudienteProfesion) || '-');
+    startY = 121;
+    drawSection(startY, 30, "DATOS DEL ACUDIENTE");
+    drawRow(startY + 6.5, [
+      { lbl: "APELLIDOS", val: val(s.acudienteApellidos) || '-', w: 1 },
+      { lbl: "NOMBRES", val: val(s.acudienteNombres) || '-', w: 1 },
+      { lbl: "NRO DOCUMENTO", val: val(s.acudienteDocumento) || '-', w: 1 },
+      { lbl: "TELÉFONO", val: val(s.acudienteTelefono) || '-', w: 1 },
+      { lbl: "MUNICIPIO", val: val(s.acudienteMunicipio) || 'PUERTO ASÍS', w: 1 }
+    ]);
+    drawRow(startY + 18, [
+      { lbl: "DIRECCIÓN", val: val(s.acudienteDireccion) || '-', w: 2 },
+      { lbl: "PARENTESCO", val: val(s.acudienteParentesco) || '-', w: 1 },
+      { lbl: "PROFESIÓN", val: val(s.acudienteProfesion) || '-', w: 2 }
+    ]);
 
     // 4. RENOVACIÓN DE MATRÍCULA
-    startY = 181;
-    drawSectionTitle(startY, "RENOVACIÓN DE MATRÍCULA (Marque con una X)");
+    startY = 153;
+    drawSection(startY, 20, "RENOVACIÓN DE MATRÍCULA (MARQUE CON UNA X)");
     doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.rect(10, startY + 7, 196, 16);
-    doc.line(10, startY + 15, 206, startY + 15);
+    doc.line(10, startY + 13, 205, startY + 13);
     for(let i=1; i<7; i++) {
-      doc.line(10 + (28 * i), startY + 7, 10 + (28 * i), startY + 23);
+      doc.line(10 + (27.85 * i), startY + 5, 10 + (27.85 * i), startY + 20);
     }
     const yearsRow1 = [2026, 2027, 2028, 2029, 2030, 2031, 2032];
     const yearsRow2 = [2033, 2034, 2035, 2036, 2037, 2038, 2039];
     doc.setTextColor(textColor[0], textColor[1], textColor[2]);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    yearsRow1.forEach((y, i) => doc.text(y.toString(), 10 + (28 * i) + 14, startY + 12, { align: "center" }));
-    yearsRow2.forEach((y, i) => doc.text(y.toString(), 10 + (28 * i) + 14, startY + 20, { align: "center" }));
+    yearsRow1.forEach((y, i) => doc.text(y.toString(), 10 + (27.85 * i) + 13.9, startY + 10, { align: "center" }));
+    yearsRow2.forEach((y, i) => doc.text(y.toString(), 10 + (27.85 * i) + 13.9, startY + 17, { align: "center" }));
 
     // 5. SOLICITUD DE RETIRO Y CAUSAS
-    startY = 208;
-    drawSectionTitle(startY, "SOLICITUD DE RETIRO Y CAUSAS");
-    drawField(10, startY + 7, 49, 12, "FECHA RETIRO", "");
-    drawField(59, startY + 7, 73, 12, "NOMBRE QUIEN SOLICITA", "");
-    drawField(132, startY + 7, 74, 12, "FIRMA QUIEN SOLICITA", "");
+    startY = 175;
+    drawSection(startY, 37, "SOLICITUD DE RETIRO Y CAUSAS");
+    drawRow(startY + 6.5, [
+      { lbl: "FECHA RETIRO", val: "", w: 1 },
+      { lbl: "NOMBRE QUIEN SOLICITA", val: "", w: 2 },
+      { lbl: "FIRMA QUIEN SOLICITA", val: "", w: 2 }
+    ]);
     
-    doc.setFillColor(137, 180, 196); // #89b4c4
-    doc.rect(10, startY + 20, 196, 5, 'F');
+    // Subheader
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(10, startY + 18, 195, 5, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7);
-    doc.text("MARQUE CON UNA X EL MOTIVO", 108, startY + 23.5, { align: "center" });
-    
-    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.rect(10, startY + 25, 196, 10);
-    const motivos = ["CAMBIO DOMICILIO", "SITUACIÓN ECONÓMICA", "SANCIÓN INSTITUCIONAL", "TRASLADO", "BAJO RENDIMIENTO", "SALUD", "OTRO"];
-    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-    motivos.forEach((m, i) => {
-      doc.rect(12 + (26 * i), startY + 27, 4, 4);
-      doc.text(m, 17 + (26 * i), startY + 30);
-    });
+    doc.setFontSize(8);
+    doc.text("MARQUE CON UNA X EL MOTIVO", 107.5, startY + 21.5, { align: "center" });
 
-    // 6. FIRMAS Y TIPO DE MATRÍCULA
-    doc.addPage();
+    const drawCB = (x: number, y: number, label: string) => {
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(x, y, 3, 3);
+      doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.text(label, x + 4.5, y + 2.5);
+    };
+    drawCB(14, startY + 25, "CAMBIO DOMICILIO");
+    drawCB(60, startY + 25, "SITUACIÓN ECONÓMICA");
+    drawCB(115, startY + 25, "SANCIÓN INSTITUCIONAL");
+    drawCB(165, startY + 25, "TRASLADO");
     
+    drawCB(14, startY + 30, "BAJO RENDIMIENTO");
+    drawCB(60, startY + 30, "SALUD");
+    drawCB(115, startY + 30, "OTRO");
+
+    // 6. TIPO DE MATRÍCULA y DOCUMENTOS
+    startY = 214;
+    drawHalfSection(10, startY, 95.5, 37, "TIPO DE MATRÍCULA");
+    drawHalfSection(109.5, startY, 95.5, 37, "DOCUMENTOS HABILITANTES QUE PRESENTA");
+
     const drawCheckRow = (x: number, y: number, label: string) => {
       doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.text(label, x + 2, y + 4);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.text(label, x + 2, y + 3.5);
+      
       doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.rect(x + 75, y, 7, 5);
-      doc.text("SI", x + 76.5, y + 3.5);
-      doc.rect(x + 84, y, 7, 5);
-      doc.text("NO", x + 85, y + 3.5);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      
+      doc.roundedRect(x + 72, y, 6, 4.5, 0.5, 0.5);
+      doc.text("SI", x + 73.5, y + 3.5);
+      
+      doc.roundedRect(x + 80, y, 6, 4.5, 0.5, 0.5);
+      doc.text("NO", x + 81, y + 3.5);
     };
 
-    drawSectionTitle(10, "TIPO DE MATRÍCULA");
-    doc.rect(10, 17, 95, 45);
-    drawCheckRow(10, 20, "Matrícula Condicional");
-    drawCheckRow(10, 27, "Antecedentes conductuales");
-    drawCheckRow(10, 34, "Inasistencia reiterada");
-    drawCheckRow(10, 41, "Atención especializada");
-    drawCheckRow(10, 48, "Colaborar con actividades");
-    drawCheckRow(10, 55, "No Aplica");
+    let checkY = startY + 8;
+    drawCheckRow(11.5, checkY, "Matrícula Condicional");
+    drawCheckRow(111.5, checkY, "Copia Registro Civil");
+    
+    checkY += 4.5;
+    drawCheckRow(11.5, checkY, "Antecedentes conductuales");
+    drawCheckRow(111.5, checkY, "Tarjeta Identidad / Cédula Estudiante");
+    
+    checkY += 4.5;
+    drawCheckRow(11.5, checkY, "Inasistencia reiterada");
+    drawCheckRow(111.5, checkY, "Cédula Acudiente");
+    
+    checkY += 4.5;
+    drawCheckRow(11.5, checkY, "Atención especializada");
+    drawCheckRow(111.5, checkY, "Certificado / Carnet Salud");
+    
+    checkY += 4.5;
+    drawCheckRow(11.5, checkY, "Colaborar con actividades");
+    drawCheckRow(111.5, checkY, "Recibo Energía");
+    
+    checkY += 4.5;
+    drawCheckRow(11.5, checkY, "No Aplica");
+    drawCheckRow(111.5, checkY, "2 Fotos Carnet");
 
-    drawSectionTitle(10, "DOCUMENTOS HABILITANTES QUE PRESENTA"); // Fakes position for right col
-    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.rect(111, 10, 95, 6, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7.5);
-    doc.text("DOCUMENTOS HABILITANTES QUE PRESENTA", 158.5, 14.5, { align: "center" });
-    doc.rect(111, 17, 95, 45);
-    drawCheckRow(111, 20, "Copia Registro Civil");
-    drawCheckRow(111, 27, "Tarjeta Identidad / Cédula Estudiante");
-    drawCheckRow(111, 34, "Cédula Acudiente");
-    drawCheckRow(111, 41, "Certificado / Carnet Salud");
-    drawCheckRow(111, 48, "Recibo Energía");
-    drawCheckRow(111, 55, "2 Fotos Carnet");
-
-    // Firmas
+    // 7. Firmas
+    startY = 267; // Bajado para aprovechar el espacio al final de la página
     doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.line(30, 95, 80, 95);
+    doc.setLineWidth(0.4);
+    doc.line(35, startY, 85, startY);
+    doc.line(130, startY, 180, startY);
+
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     doc.setFont("helvetica", "bold");
-    doc.text("Firma Estudiante", 55, 100, { align: "center" });
+    doc.setFontSize(8.5);
+    doc.text("Firma Estudiante", 60, startY + 4, { align: "center" });
+    doc.text("Firma Acudiente", 155, startY + 4, { align: "center" });
 
-    doc.line(130, 95, 180, 95);
-    doc.text("Firma Acudiente", 155, 100, { align: "center" });
+    // === PÁGINA 2 ===
+    doc.addPage();
+    
+    // Título
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("RENOVACIÓN DE MATRÍCULA", 107.5, 20, { align: "center" });
+
+    // Subtítulo (Píldora)
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.roundedRect(10, 25, 195, 7, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.text("NOS COMPROMETEMOS A CUMPLIR EL REGLAMENTO DE LA INSTITUCIÓN", 107.5, 30, { align: "center" });
+
+    // Tabla
+    let currentY = 36;
+    const colWidths = [14, 14, 14, 72.5, 72.5];
+    const colLabels = ["GRADO", "EDAD", "AÑO", "FIRMA DEL ESTUDIANTE", "FIRMA ACUDIENTE"];
+    const gapX = 2;
+    const gapY = 1.5;
+    const rowH = 5.5;
+    const numRows = 22;
+
+    let cx = 10;
+    for(let c=0; c<5; c++) {
+      // Draw Header
+      doc.setFillColor(225, 235, 245); // Color gris claro/azulado que concuerda
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(cx, currentY, colWidths[c], 6.5, 1, 1, 'FD');
+      
+      doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(colLabels[c], cx + colWidths[c]/2, currentY + 4.5, { align: "center" });
+      
+      // Draw Cells
+      let cy = currentY + 6.5 + gapY;
+      for(let r=0; r<numRows; r++) {
+         doc.roundedRect(cx, cy, colWidths[c], rowH, 0.5, 0.5, 'S');
+         cy += rowH + gapY;
+      }
+      
+      cx += colWidths[c] + gapX;
+    }
+
+    // Observaciones
+    const obsY = currentY + 6.5 + gapY + numRows*(rowH + gapY) + 4;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("OBSERVACIONES:", 10, obsY);
+    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.line(40, obsY, 205, obsY);
+    
+    let lineY = obsY + 8;
+    for(let i=0; i<4; i++) {
+       doc.line(10, lineY, 205, lineY);
+       lineY += 8;
+    }
+    
+    // Firma Rector
+    const activeRectorSignature = localStorage.getItem('iea_custom_signature') || '';
+    if (activeRectorSignature && activeRectorSignature.length > 50) {
+      try {
+        let sigFormat = "PNG";
+        if (activeRectorSignature.includes("image/jpeg") || activeRectorSignature.includes("image/jpg")) sigFormat = "JPEG";
+        else if (activeRectorSignature.includes("image/webp")) sigFormat = "WEBP";
+        doc.addImage(activeRectorSignature, sigFormat, 87.5, lineY + 5, 40, 20);
+      } catch(e) {
+        console.error("Error drawing signature", e);
+      }
+    }
+    
+    doc.line(70, lineY + 28, 145, lineY + 28);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("Firma Rector", 107.5, lineY + 33, { align: "center" });
 
     doc.save(`Ficha_Matricula_${s.numeroDocumento || 'Ficha'}.pdf`);
   };

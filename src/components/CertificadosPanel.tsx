@@ -83,12 +83,15 @@ export default function CertificadosPanel() {
     error: null
   });
   
+  // Local state to track IHS assignments during import preview
+  const [importIhsMap, setImportIhsMap] = useState<{ [subject: string]: string }>({});
+
   const [formName, setFormName] = useState('');
   const [formDocumento, setFormDocumento] = useState('');
   const [formTipoDoc, setFormTipoDoc] = useState('TI');
   const [formGrado, setFormGrado] = useState('TERCERO (3°)');
   const [formJornada, setFormJornada] = useState('ÚNICA');
-  const [formComportamiento, setFormComportamiento] = useState('ALTO');
+  const [formComportamiento, setFormComportamiento] = useState('SUPERIOR');
 
   // Interactive Grade rows
   const [formNotas, setFormNotas] = useState<{ materia: string; ihs: string; nota: string }[]>([
@@ -104,11 +107,17 @@ export default function CertificadosPanel() {
   };
 
   const normalizeSubjectKey = (header: string): string => {
-    const clean = removeAccentsAndUpper(header);
+    let clean = removeAccentsAndUpper(header);
+    // Fix common typos from Excel files
+    clean = clean.replace('CIENCIASOCIALES', 'CIENCIAS SOCIALES');
+    clean = clean.replace('MATEMATICA S', 'MATEMATICAS');
+    clean = clean.replace('TRIGONOMETRI A', 'TRIGONOMETRIA');
+    clean = clean.replace('EDUACION FISICA', 'EDUCACION FISICA');
+    
     if (clean === "CIENCIAS SOCIALES" || clean === "SOCIALES") return "CIENCIAS SOCIALES";
     if (clean === "EDUCACION FISICA" || clean === "ED FISICA" || clean === "ED. FISICA") return "EDUCACION FISICA";
     if (clean === "EDUCACION ARTISTICA" || clean === "ARTISTICA" || clean === "ED ARTISTICA" || clean === "ED. ARTISTICA") return "EDUCACION ARTISTICA";
-    if (clean === "TECNOLOGIA E INFORMATICA" || clean === "TECNOLOGIA" || clean === "INFORMATICA" || clean === "SISTEMAS" || clean === "TECNOLOGIA E INF") return "TECNOLOGIA E INFORMATICA";
+    if (clean === "TECNOLOGIA E INFORMATICA" || clean === "TECNOLOGIA" || clean === "INFORMATICA" || clean === "SISTEMAS" || clean === "TECNOLOGIA E INF" || clean === "TECNOLOGIA E INFORMATIC") return "TECNOLOGIA E INFORMATICA";
     if (clean === "ETICA Y VALORES" || clean === "ETICA" || clean === "ED ETICA" || clean === "ED. ETICA" || clean === "ETICA Y VALORES HUMANOS") return "ETICA Y VALORES";
     if (clean === "EDUCACION RELIGIOSA" || clean === "RELIGION" || clean === "ED RELIGIOSA" || clean === "ED. RELIGIOSA" || clean === "RELIGION Y MORAL") return "RELIGION";
     if (clean === "LENGUA CASTELLANA" || clean === "LENGUAJE" || clean === "ESPAÑOL" || clean === "LITERATURA") return "LENGUAJE";
@@ -176,10 +185,12 @@ export default function CertificadosPanel() {
         const metadataIndices = [idxDocumento, idxNombre, idxTipoDoc, idxGrado, idxJornada, idxComportamiento, idxAnio];
         const subjectCols: { index: number; originalHeader: string; cleanHeader: string }[] = [];
 
+        const excludedCols = ['PROM', 'DESC.', 'DESC', 'MATRICULA', 'ESTADO', 'OBSERVACIONES'];
+
         headers.forEach((header, index) => {
           if (header && !metadataIndices.includes(index) && header.toUpperCase() !== 'ID' && header.trim() !== '') {
             const cleanSubj = removeAccentsAndUpper(header);
-            if (cleanSubj.length >= 2 && cleanSubj.length < 40) {
+            if (cleanSubj.length >= 2 && cleanSubj.length < 40 && !excludedCols.includes(cleanSubj)) {
               subjectCols.push({
                 index,
                 originalHeader: header,
@@ -204,7 +215,13 @@ export default function CertificadosPanel() {
           let tipoDoc = idxTipoDoc !== -1 && row[idxTipoDoc] ? String(row[idxTipoDoc]).trim().toUpperCase() : 'TI';
           let grado = idxGrado !== -1 && row[idxGrado] ? String(row[idxGrado]).trim().toUpperCase() : 'NOVENO (9°)';
           let jornada = idxJornada !== -1 && row[idxJornada] ? String(row[idxJornada]).trim().toUpperCase() : 'ÚNICA';
-          let comportamiento = idxComportamiento !== -1 && row[idxComportamiento] ? String(row[idxComportamiento]).trim().toUpperCase() : 'ALTO';
+          let comportamiento = 'SUPERIOR';
+          if (idxComportamiento !== -1 && row[idxComportamiento]) {
+            const compVal = String(row[idxComportamiento]).trim().toUpperCase();
+            if (compVal.includes('ALTO')) comportamiento = 'ALTO';
+            else if (compVal.includes('BASICO') || compVal.includes('BÁSICO')) comportamiento = 'BÁSICO';
+            else if (compVal.includes('BAJO')) comportamiento = 'BAJO';
+          }
           let anioRow = idxAnio !== -1 && row[idxAnio] ? String(row[idxAnio]).trim() : selectedAnio;
 
           // Normalize grade mappings inside Alvernia format
@@ -232,7 +249,7 @@ export default function CertificadosPanel() {
               const notaNorm = normalizarNota(notaStr);
               if (notaNorm) {
                 notasObj[colObj.cleanHeader] = {
-                  ihs: '', 
+                  ihs: '', // Will be assigned during upload based on importIhsMap
                   nota: notaNorm,
                   desempeno: calcularDesempeno(notaNorm)
                 };
@@ -256,12 +273,44 @@ export default function CertificadosPanel() {
           throw new Error('No se detectaron filas de estudiantes con notas válidas.');
         }
 
+        const detectedSubjectsSet = new Set<string>();
+        parsedStudents.forEach(s => {
+          Object.keys(s.notas).forEach(sub => detectedSubjectsSet.add(sub));
+        });
+        const detectedSubjectsArr = Array.from(detectedSubjectsSet);
+
+        const ihsMapRaw = localStorage.getItem('iea_ihs_config');
+        const globalIhsMap = ihsMapRaw ? JSON.parse(ihsMapRaw) : {};
+
+        // Only show subjects that have NOT been configured yet
+        const unconfiguredSubjects = detectedSubjectsArr.filter(sub => {
+          return !globalIhsMap[sub] || globalIhsMap[sub].trim() === '';
+        });
+
+        // Auto-suggest logic
+        const suggestIhs = (subj: string) => {
+          const s = subj.toUpperCase();
+          if (s.includes('MATEMATICA') || s.includes('LENGUA') || s.includes('COMUNICATIVA') || s.includes('COGNITIVA')) return '5';
+          if (s.includes('NATURAL') || s.includes('SOCIAL')) return '4';
+          if (s.includes('INGLES') || s.includes('CORPORAL') || s.includes('SOCIOAFECTIVA')) return '3';
+          if (s.includes('FISICA') || s.includes('TECNOLOGIA') || s.includes('ARTISTICA') || s.includes('ESTETICA')) return '2';
+          if (s.includes('ETICA') || s.includes('RELIGION') || s.includes('ESPIRITUAL')) return '1';
+          return '';
+        };
+        
+        const initialImportIhsMap: { [key: string]: string } = {};
+        unconfiguredSubjects.forEach(sub => {
+          initialImportIhsMap[sub] = suggestIhs(sub);
+        });
+
+        setImportIhsMap(initialImportIhsMap);
+
         setImportingState({
           status: 'preview',
           progress: 0,
           total: parsedStudents.length,
           students: parsedStudents,
-          detectedSubjects: subjectCols.map(s => s.cleanHeader),
+          detectedSubjects: unconfiguredSubjects, // Only pass unconfigured subjects to UI
           error: null
         });
 
@@ -283,8 +332,29 @@ export default function CertificadosPanel() {
   };
 
   const handleExecuteImport = async () => {
-    const list = importingState.students;
-    if (list.length === 0) return;
+    const globalIhsRaw = localStorage.getItem('iea_ihs_config');
+    const globalIhs = globalIhsRaw ? JSON.parse(globalIhsRaw) : {};
+
+    // 1. Update students with both global mappings and new edited mappings
+    const finalStudents = importingState.students.map(student => {
+      const updatedNotas: Record<string, NotaDetalle> = {};
+      Object.entries(student.notas).forEach(([subj, detalle]) => {
+        updatedNotas[subj] = {
+          ...detalle,
+          // Prefer newly edited mapping in the UI; fallback to global config
+          ihs: importIhsMap[subj] || globalIhs[subj] || ''
+        };
+      });
+      return { ...student, notas: updatedNotas };
+    });
+
+    // 2. Save ONLY the new mappings back to Global Config
+    if (Object.keys(importIhsMap).length > 0) {
+      const updatedGlobalIhs = { ...globalIhs, ...importIhsMap };
+      localStorage.setItem('iea_ihs_config', JSON.stringify(updatedGlobalIhs));
+      localStorage.setItem('iea_config_customized', 'true');
+      window.dispatchEvent(new Event('iea_config_updated'));
+    }
 
     setImportingState(prev => ({ ...prev, status: 'uploading', progress: 0 }));
 
@@ -296,10 +366,14 @@ export default function CertificadosPanel() {
     const allJson = await allRes.json();
     const existingList = allJson.data || [];
 
-    for (let i = 0; i < list.length; i++) {
-      const student = list[i];
+    for (let i = 0; i < finalStudents.length; i++) {
+      const student = finalStudents[i];
       try {
-        const existingData = existingList.find((s: any) => s.anio === student.anio && s.documento === student.documento);
+        const existingData = existingList.find((s: any) => 
+          s.anio === student.anio && 
+          s.grado === student.grado && 
+          s.nombre === student.nombre
+        );
 
         if (existingData && existingData.id) {
           const payload = {
@@ -399,7 +473,7 @@ export default function CertificadosPanel() {
     setFormTipoDoc('TI');
     setFormGrado('TERCERO (3°)');
     setFormJornada('ÚNICA');
-    setFormComportamiento('ALTO');
+    setFormComportamiento('SUPERIOR');
     setFormNotas([{ materia: '', ihs: '', nota: '' }]);
     setShowModal(true);
   };
@@ -411,7 +485,7 @@ export default function CertificadosPanel() {
     setFormTipoDoc(student.tipo_documento || 'TI');
     setFormGrado(student.grado);
     setFormJornada(student.jornada);
-    setFormComportamiento(student.comportamiento || 'ALTO');
+    setFormComportamiento(student.comportamiento || 'SUPERIOR');
 
     // Build courses list from student.notas object
     const rows = student.notas ? Object.entries(student.notas).map(([materia, d]) => ({
@@ -462,6 +536,7 @@ export default function CertificadosPanel() {
     if (!nStr.includes(',')) {
       const parsedNum = parseFloat(nStr);
       if (!isNaN(parsedNum)) {
+        if (parsedNum === 0) return '0,0'; // Permitir 0.0 para reprobados/retirados
         if (parsedNum < 1.0) return '1,0';
         if (parsedNum > 5.0) return '5,0';
         return parsedNum.toFixed(1).replace('.', ',');
@@ -475,13 +550,14 @@ export default function CertificadosPanel() {
         if (parteDecimal.length > 1) return parteEntera + ',' + parteDecimal.charAt(0);
         const parsedNum = parseFloat(parteEntera + '.' + parteDecimal);
         if (!isNaN(parsedNum)) {
+          if (parsedNum === 0) return '0,0'; // Permitir 0.0 para reprobados/retirados
           if (parsedNum < 1.0) return '1,0';
           if (parsedNum > 5.0) return '5,0';
           return parsedNum.toFixed(1).replace('.', ',');
         }
       }
     }
-    return nStr;
+    return "";
   };
 
   const calcularDesempeno = (nota: string): string => {
@@ -726,10 +802,11 @@ export default function CertificadosPanel() {
       // Paragraph transcript
       let y = 78;
       doc.setFontSize(10);
-      const parrafo = `Que el(la) estudiante ${s.nombre} identificado(a) con CC ${s.documento}, cursó y aprobó el grado ${s.grado}, jornada ${s.jornada}, durante el año lectivo ${s.anio}, con la siguiente intensidad horaria y juicios valorativos:`;
+      const docText = s.documento ? ` identificado(a) con ${s.tipo_documento || 'TI'} ${s.documento}` : '';
+      const parrafo = `Que el(la) estudiante ${s.nombre}${docText}, cursó y aprobó el grado ${s.grado}, jornada ${s.jornada}, durante el año lectivo ${s.anio}, con la siguiente intensidad horaria y juicios valorativos:`;
 
       const nombrePartes = s.nombre.split(' ');
-      y = drawJustifiedText(doc, parrafo, 15, y, 180, 6, [...nombrePartes, s.grado, s.jornada]);
+      y = drawJustifiedText(doc, parrafo, 15, y, 180, 6, [...nombrePartes, s.grado, s.jornada, s.documento].filter(Boolean));
 
       // Academics Table
       const materiasRows = s.notas ? Object.entries(s.notas).map(([mat, d]) => [
@@ -783,7 +860,7 @@ export default function CertificadosPanel() {
       y += 18;
 
       // Retrieve dynamic rector parameters from configuration
-      const rectorName = localStorage.getItem('iea_rector_name') || "ESP. DAVID JARAMILLO CORAL";
+      const rectorName = localStorage.getItem('iea_rector_name') || "ESP. CARLOS ARCESIO ACOSTA CORONEL";
       const rectorCargo = localStorage.getItem('iea_rector_cargo') || "RECTOR";
       const customSignature = localStorage.getItem('iea_custom_signature') || '';
 
@@ -1157,7 +1234,7 @@ export default function CertificadosPanel() {
                             className="w-full p-2 border rounded-xl text-xs bg-white text-slate-800"
                           >
                             <option value="">--Seleccione Materia--</option>
-                            {MATERIAS_PREDEFINIDAS.map(m => (
+                            {Array.from(new Set([...MATERIAS_PREDEFINIDAS, row.materia])).filter(Boolean).map(m => (
                               <option key={m} value={m}>{m}</option>
                             ))}
                           </select>
@@ -1358,16 +1435,36 @@ export default function CertificadosPanel() {
                     </button>
                   </div>
 
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                    <p className="text-[10px] font-extrabold uppercase text-slate-500 mb-1 tracking-wider">Materias Identificadas ({importingState.detectedSubjects.length}):</p>
-                    <div className="flex flex-wrap gap-1">
-                      {importingState.detectedSubjects.map((sub, idx) => (
-                        <span key={idx} className="bg-slate-200 text-slate-700 border border-slate-300 font-mono text-[9px] px-2 py-0.5 rounded-full font-bold">
-                          {sub}
-                        </span>
-                      ))}
+                  {importingState.detectedSubjects.length > 0 && (
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-extrabold uppercase text-slate-700 tracking-wider">
+                          Nuevas Materias Identificadas ({importingState.detectedSubjects.length}) - Configurar IHS
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-semibold bg-white px-2 py-1 border border-slate-200 rounded">
+                          Estos valores se guardarán automáticamente
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {importingState.detectedSubjects.map((sub, idx) => (
+                          <div key={idx} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg">
+                            <span className="font-bold text-[10px] text-slate-700 uppercase">{sub}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] text-slate-400 font-bold uppercase">IHS:</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="20"
+                                value={importIhsMap[sub] || ''}
+                                onChange={(e) => setImportIhsMap(prev => ({ ...prev, [sub]: e.target.value }))}
+                                className="w-14 p-1 border border-emerald-300 bg-emerald-50 rounded text-center text-xs font-bold text-emerald-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[350px] overflow-y-auto">
                     <table className="w-full text-left border-collapse text-xs">

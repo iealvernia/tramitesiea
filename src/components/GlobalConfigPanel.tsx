@@ -23,6 +23,11 @@ export default function GlobalConfigPanel() {
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const [dbError, setDbError] = useState<string>('');
+  
+  // IHS Mapping State
+  const [ihsConfig, setIhsConfig] = useState<{ [subject: string]: string }>({});
+  const [newSubject, setNewSubject] = useState('');
+  const [newIhs, setNewIhs] = useState('');
 
   // Synchronize configuration from CockroachDB 'alvernia_config' table via our API
   const fetchFromCockroach = async () => {
@@ -64,6 +69,7 @@ export default function GlobalConfigPanel() {
         const remoteCargo = data.config.rectorCargo || 'RECTOR';
         const remoteLogo = data.config.logoBase64 || '';
         const remoteSignature = data.config.rectorSignature || '';
+        const remoteIhs = data.config.ihsConfig || {};
 
         setAppName(remoteApp);
         setInstitutionName(remoteInst);
@@ -79,6 +85,7 @@ export default function GlobalConfigPanel() {
         setRectorName(remoteName);
         setRectorDoc(remoteDoc);
         setRectorCargo(remoteCargo);
+        setIhsConfig(remoteIhs);
 
         localStorage.setItem('iea_app_name', remoteApp);
         localStorage.setItem('alvernia_institution_name', remoteInst);
@@ -95,6 +102,7 @@ export default function GlobalConfigPanel() {
         localStorage.setItem('iea_rector_name', remoteName);
         localStorage.setItem('iea_rector_doc', remoteDoc);
         localStorage.setItem('iea_rector_cargo', remoteCargo);
+        localStorage.setItem('iea_ihs_config', JSON.stringify(remoteIhs));
         
         // Handle logo sync
         if (remoteLogo) {
@@ -211,7 +219,8 @@ export default function GlobalConfigPanel() {
         rectorDocument: finalRectorDoc,
         rectorCargo: finalRectorCargo,
         logoBase64: finalLogo,
-        rectorSignature: finalSignature
+        rectorSignature: finalSignature,
+        ihsConfig: finalIhsConfig
       };
 
       const response = await fetch('/api/alvernia/config', {
@@ -255,6 +264,7 @@ export default function GlobalConfigPanel() {
     const storedCargo = localStorage.getItem('iea_rector_cargo') || 'RECTOR';
     const storedLogo = localStorage.getItem('iea_custom_logo') || '';
     const storedSignature = localStorage.getItem('iea_custom_signature') || '';
+    const storedIhs = JSON.parse(localStorage.getItem('iea_ihs_config') || '{}');
 
     setAppName(storedApp);
     setInstitutionName(storedInst);
@@ -273,6 +283,7 @@ export default function GlobalConfigPanel() {
     setRectorCargo(storedCargo);
     setLogoBase64(storedLogo);
     setSignatureBase64(storedSignature);
+    setIhsConfig(storedIhs);
 
     // Dynamic sync from CockroachDB
     fetchFromCockroach();
@@ -354,6 +365,7 @@ export default function GlobalConfigPanel() {
     localStorage.setItem('iea_rector_name', nameUpper);
     localStorage.setItem('iea_rector_doc', rectorDoc);
     localStorage.setItem('iea_rector_cargo', cargoUpper);
+    localStorage.setItem('iea_ihs_config', JSON.stringify(ihsConfig));
     
     // Also save a fallback flag in case user customized it
     localStorage.setItem('iea_config_customized', 'true');
@@ -375,7 +387,8 @@ export default function GlobalConfigPanel() {
       footerCity,
       rectorName: nameUpper,
       rectorDocument: rectorDoc,
-      rectorCargo: cargoUpper
+      rectorCargo: cargoUpper,
+      ihsConfig
     });
   };
 
@@ -678,6 +691,78 @@ CREATE POLICY "Permitir insertar/modificar general" ON public.institucion_config
                   <div>
                     <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Nombre Corto App (Menú Lateral)</label>
                     <input type="text" value={appName} onChange={e => setAppName(e.target.value)} placeholder="Ej: App Gestión" className="w-full p-2 border border-slate-200 rounded-xl text-xs uppercase font-semibold text-slate-800 focus:outline-none focus:border-emerald-500" required />
+                  </div>
+                </div>
+              </div>
+
+              {/* IHS Mapping Settings */}
+              <div className="space-y-3">
+                <p className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider mb-1 flex items-center gap-1 border-b border-slate-100 pb-2">
+                  <Database className="w-3.5 h-3.5 text-emerald-500" />
+                  Intensidad Horaria Semanal (IHS) Automática
+                </p>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <p className="text-xs text-slate-500 mb-3 leading-snug">
+                    Configura aquí las horas para cada materia. Cuando subas un archivo Excel al módulo de Certificados, 
+                    el sistema detectará la materia y le asignará automáticamente esta Intensidad Horaria Semanal.
+                  </p>
+                  
+                  <div className="flex gap-2 mb-4">
+                    <input 
+                      type="text" 
+                      placeholder="Materia (Ej. MATEMÁTICAS)" 
+                      value={newSubject}
+                      onChange={e => setNewSubject(e.target.value)}
+                      className="flex-1 p-2 border border-slate-300 rounded-lg text-xs uppercase"
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="IHS" 
+                      value={newIhs}
+                      onChange={e => setNewIhs(e.target.value)}
+                      className="w-24 p-2 border border-slate-300 rounded-lg text-xs text-center"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newSubject.trim() && newIhs.trim()) {
+                          const updated = { ...ihsConfig, [newSubject.trim().toUpperCase()]: newIhs.trim() };
+                          setIhsConfig(updated);
+                          setNewSubject('');
+                          setNewIhs('');
+                        }
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                    >
+                      Añadir
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {Object.entries(ihsConfig).map(([subject, ihs]) => (
+                      <div key={subject} className="flex justify-between items-center bg-white border border-slate-200 px-3 py-2 rounded-lg text-xs">
+                        <span className="font-semibold text-slate-700">{subject}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-mono font-bold text-xs">{ihs} hrs</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = { ...ihsConfig };
+                              delete updated[subject];
+                              setIhsConfig(updated);
+                            }}
+                            className="text-rose-500 hover:text-rose-700 font-bold px-2"
+                          >
+                            X
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {Object.keys(ihsConfig).length === 0 && (
+                      <p className="text-xs text-slate-400 italic text-center py-4 bg-white border border-slate-100 rounded-lg">
+                        No hay materias configuradas.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

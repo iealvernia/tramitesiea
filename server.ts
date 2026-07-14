@@ -148,9 +148,9 @@ async function ensureDbTables() {
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS calendario TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS footer_motto TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS footer_address TEXT;
-      ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS footer_emails TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS footer_website TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS footer_city TEXT;
+      ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS ihs_config JSONB;
     `);
 
     // Create alvernia_novedades table for Agenda de Permisos
@@ -1382,6 +1382,7 @@ app.get("/api/alvernia/config", async (req, res) => {
           footerEmails: row.footer_emails,
           footerWebsite: row.footer_website,
           footerCity: row.footer_city,
+          ihsConfig: typeof row.ihs_config === "string" ? JSON.parse(row.ihs_config) : row.ihs_config,
           habilitationDates: typeof row.habilitation_dates === "string" ? JSON.parse(row.habilitation_dates) : row.habilitation_dates
         }
       });
@@ -1423,6 +1424,7 @@ app.post("/api/alvernia/config", async (req, res) => {
     rectorCargo,
     rectorSignature,
     logoBase64,
+    ihsConfig,
     habilitationDates
   } = req.body;
 
@@ -1463,8 +1465,8 @@ app.post("/api/alvernia/config", async (req, res) => {
         id, app_name, institution_name, institution_dane, institution_nit, educational_level, calendario,
         footer_motto, footer_address, footer_emails, footer_website, footer_city,
         rector_name, rector_document, rector_document_expedition, rector_cargo, rector_signature, 
-        logo_base64, habilitation_dates, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP)
+        logo_base64, ihs_config, habilitation_dates, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP)
       ON CONFLICT (id) DO UPDATE SET
         app_name = EXCLUDED.app_name,
         institution_name = EXCLUDED.institution_name,
@@ -1483,6 +1485,7 @@ app.post("/api/alvernia/config", async (req, res) => {
         rector_cargo = EXCLUDED.rector_cargo,
         rector_signature = EXCLUDED.rector_signature,
         logo_base64 = EXCLUDED.logo_base64,
+        ihs_config = EXCLUDED.ihs_config,
         habilitation_dates = EXCLUDED.habilitation_dates,
         updated_at = CURRENT_TIMESTAMP
     `, [
@@ -1504,7 +1507,8 @@ app.post("/api/alvernia/config", async (req, res) => {
       rectorCargo || null,
       signatureUrl || null,
       logoBase64 || null,
-      JSON.stringify(habilitationDates || {})
+      ihsConfig ? JSON.stringify(ihsConfig) : null,
+      habilitationDates ? JSON.stringify(habilitationDates) : null
     ]);
 
     res.json({

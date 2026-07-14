@@ -9,8 +9,10 @@ import {
   Printer, 
   X, 
   Save, 
-  AlertCircle
+  AlertCircle,
+  Upload
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
@@ -64,6 +66,22 @@ export default function ConstanciasPanel() {
   // Modal / Form state
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importingState, setImportingState] = useState<{
+    status: 'idle' | 'parsing' | 'preview' | 'uploading';
+    progress: number;
+    total: number;
+    students: StudentConstancia[];
+    error: string | null;
+  }>({
+    status: 'idle',
+    progress: 0,
+    total: 0,
+    students: [],
+    error: null
+  });
 
   const [formState, setFormState] = useState<StudentConstancia>({
     anio: '2025',
@@ -148,8 +166,198 @@ export default function ConstanciasPanel() {
       alert(`Base de constancias del año ${selectedAnio} limpiada.`);
       loadData();
     } catch (err: any) {
-      alert('Error: ' + err.message);
+      alert('Error limpiando registros: ' + err.message);
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+    setImportingState(prev => ({ ...prev, status: 'parsing', error: null }));
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        const rows = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
+        if (rows.length < 2) throw new Error('El archivo parece estar vacío o no tiene suficientes filas.');
+
+        // Find header row
+        let headerRowIdx = 0;
+        let maxCols = 0;
+        for (let i = 0; i < Math.min(10, rows.length); i++) {
+          const colsCount = rows[i] ? rows[i].filter(c => c !== undefined && c !== null && String(c).trim() !== '').length : 0;
+          if (colsCount > maxCols) {
+            maxCols = colsCount;
+            headerRowIdx = i;
+          }
+        }
+
+        const headers: string[] = rows[headerRowIdx].map(h => h ? String(h).trim() : '');
+        const dataRows = rows.slice(headerRowIdx + 1);
+
+        const findColIdx = (keywords: RegExp) => {
+          return headers.findIndex(h => keywords.test(h.toLowerCase()));
+        };
+
+        const idxDocumento = findColIdx(/doc|id|identificac|cedula|cc|nro/i);
+        const idxNombre = findColIdx(/nom|estud|alumn|apell/i);
+        const idxTipoDoc = findColIdx(/tipo.*doc|tp.*doc|td/i);
+        const idxGrado = findColIdx(/grado|curso/i);
+        const idxJornada = findColIdx(/jornada|jor/i);
+        const idxSede = findColIdx(/sede|institucion/i);
+        const idxNacimiento = findColIdx(/nacimiento|fecha.*nac/i);
+        const idxInicio = findColIdx(/inicio|fecha.*in/i);
+
+        if (idxNombre === -1 && idxDocumento === -1) {
+          throw new Error('No se encontraron las columnas necesarias para "Nombre" o "Documento". Verifique los encabezados.');
+        }
+
+        const parsedStudents: StudentConstancia[] = [];
+        dataRows.forEach((row: any[]) => {
+          if (!Array.isArray(row) || row.length === 0) return;
+
+          const docRaw = idxDocumento !== -1 ? String(row[idxDocumento] || '').trim() : '';
+          const nameRaw = idxNombre !== -1 ? String(row[idxNombre] || '').trim() : '';
+
+          if (!docRaw && !nameRaw) return;
+
+          const documento = docRaw.replace(/[^A-Za-z0-9_-]/g, "");
+          const nombre_completo = nameRaw.toUpperCase().trim();
+          
+          let tipo_documento = idxTipoDoc !== -1 && row[idxTipoDoc] ? String(row[idxTipoDoc]).trim().toUpperCase() : 'TI';
+          let grado = idxGrado !== -1 && row[idxGrado] ? String(row[idxGrado]).trim().toUpperCase() : '1';
+          let jornada = idxJornada !== -1 && row[idxJornada] ? String(row[idxJornada]).trim().toUpperCase() : 'ÚNICA';
+          let sede = idxSede !== -1 && row[idxSede] ? String(row[idxSede]).trim().toUpperCase() : 'COL ALVERNIA';
+          let fecha_nacimiento = idxNacimiento !== -1 && row[idxNacimiento] ? String(row[idxNacimiento]).trim() : '';
+          let fecha_inicio = idxInicio !== -1 && row[idxInicio] ? String(row[idxInicio]).trim() : new Date().toISOString().substring(0, 10);
+
+          let grado_cod = '1';
+          let grado_texto = 'PRIMERO';
+
+          // Try matching grado
+          if (grado.includes('11') || grado.includes('ONCE') || grado.includes('UNDECIMO')) { grado_cod = '11'; }
+          else if (grado.includes('10') || grado.includes('DECIMO')) { grado_cod = '10'; }
+          else if (grado.includes('9') || grado.includes('NOVENO')) { grado_cod = '9'; }
+          else if (grado.includes('8') || grado.includes('OCTAVO')) { grado_cod = '8'; }
+          else if (grado.includes('7') || grado.includes('SEPTIMO')) { grado_cod = '7'; }
+          else if (grado.includes('6') || grado.includes('SEXTO')) { grado_cod = '6'; }
+          else if (grado.includes('5') || grado.includes('QUINTO')) { grado_cod = '5'; }
+          else if (grado.includes('4') || grado.includes('CUARTO')) { grado_cod = '4'; }
+          else if (grado.includes('3') || grado.includes('TERCERO')) { grado_cod = '3'; }
+          else if (grado.includes('2') || grado.includes('SEGUNDO')) { grado_cod = '2'; }
+          else if (grado.includes('1') || grado.includes('PRIMERO')) { grado_cod = '1'; }
+          else if (grado.includes('0') || grado.includes('TRANSICION')) { grado_cod = '0'; }
+          else if (grado.includes('-1') || grado.includes('JARDIN')) { grado_cod = '-1'; }
+          else if (grado.includes('22')) { grado_cod = '22'; }
+          else if (grado.includes('23')) { grado_cod = '23'; }
+          else if (grado.includes('24')) { grado_cod = '24'; }
+          else if (grado.includes('25')) { grado_cod = '25'; }
+          else if (grado.includes('26')) { grado_cod = '26'; }
+
+          if (GRADOS_OPCIONES[grado_cod]) {
+            grado_texto = GRADOS_OPCIONES[grado_cod].replace(/[^A-Za-z -]/g, "").trim().toUpperCase();
+          }
+
+          parsedStudents.push({
+            anio: selectedAnio,
+            tipo_documento,
+            documento,
+            nombre_completo,
+            fecha_nacimiento,
+            sede,
+            jornada,
+            grado_cod,
+            grado_texto,
+            fecha_inicio
+          });
+        });
+
+        setImportingState({
+          status: 'preview',
+          progress: 0,
+          total: parsedStudents.length,
+          students: parsedStudents,
+          error: null
+        });
+
+      } catch (err: any) {
+        console.error('Error parsing excel:', err);
+        setImportingState(prev => ({
+          ...prev,
+          status: 'idle',
+          error: err.message || 'Error al procesar el archivo Excel.'
+        }));
+      }
+    };
+
+    reader.onerror = () => {
+      setImportingState(prev => ({ ...prev, status: 'idle', error: 'Error del sistema al leer el documento.' }));
+    };
+
+    reader.readAsBinaryString(file);
+  };
+
+  const handleExecuteImport = async () => {
+    setImportingState(prev => ({ ...prev, status: 'uploading', progress: 0 }));
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (let i = 0; i < importingState.students.length; i++) {
+      const student = importingState.students[i];
+      try {
+        const existingData = students.find((s: any) => 
+          s.anio === student.anio && 
+          s.documento === student.documento
+        );
+
+        if (existingData && existingData.id) {
+          const payload = {
+              ...student,
+              id: existingData.id
+          };
+          const updateRes = await fetch(`/api/constancias/${existingData.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const updateJson = await updateRes.json();
+          if (updateJson.error) throw new Error(updateJson.error);
+        } else {
+          const insertRes = await fetch('/api/constancias', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(student)
+          });
+          const insertJson = await insertRes.json();
+          if (insertJson.error) throw new Error(insertJson.error);
+        }
+        successCount++;
+      } catch (err: any) {
+        console.error('Error importing:', student.nombre_completo, err);
+        errorCount++;
+      }
+
+      setImportingState(prev => ({ ...prev, progress: i + 1 }));
+    }
+
+    alert(`Importación Finalizada:\n✅ ${successCount} registros guardados\n❌ ${errorCount} errores.`);
+    setShowImportModal(false);
+    setImportFile(null);
+    setImportingState({
+      status: 'idle',
+      progress: 0,
+      total: 0,
+      students: [],
+      error: null
+    });
+    loadData();
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -520,6 +728,14 @@ export default function ConstanciasPanel() {
           
           <div className="flex gap-2">
             <button
+              onClick={() => setShowImportModal(true)}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-2 shadow transition-all transform hover:-translate-y-0.5 cursor-pointer"
+            >
+              <Upload className="w-4 h-4" />
+              Importar desde Excel
+            </button>
+
+            <button
               onClick={handleOpenAdd}
               className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-2 shadow transition-all transform hover:-translate-y-0.5 cursor-pointer"
             >
@@ -832,6 +1048,148 @@ export default function ConstanciasPanel() {
         </div>
       )}
 
+      {showImportModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="bg-emerald-950 p-6 text-white shrink-0 relative">
+              <button onClick={() => setShowImportModal(false)} className="absolute top-4 right-4 text-emerald-400 hover:text-white transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+              <h3 className="text-xl font-black uppercase flex items-center gap-3">
+                <FileText className="w-6 h-6 text-emerald-500" />
+                Importar Constancias desde Excel
+              </h3>
+              <p className="text-[10px] text-emerald-300 font-bold tracking-widest mt-1 uppercase">
+                INSTITUCIÓN EDUCATIVA ALVERNIA - MÓDULO DE LA BASE DE DATOS
+              </p>
+            </div>
+
+            <div className="p-8 overflow-y-auto flex-1">
+              {importingState.status === 'idle' && (
+                <div>
+                  <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <h4 className="text-sm font-bold text-emerald-900 mb-2">Columnas esperadas en el archivo Excel:</h4>
+                    <ul className="text-xs text-emerald-800 list-disc list-inside space-y-1">
+                      <li><strong>Documento:</strong> ('doc', 'id', 'cedula')</li>
+                      <li><strong>Nombre:</strong> ('nom', 'apell', 'estudiante')</li>
+                      <li><strong>Tipo Documento:</strong> ('tipo doc', 'td') <span className="text-emerald-600/70 italic">- Opcional</span></li>
+                      <li><strong>Grado:</strong> ('grado', 'curso') <span className="text-emerald-600/70 italic">- Opcional</span></li>
+                      <li><strong>Jornada:</strong> ('jornada') <span className="text-emerald-600/70 italic">- Opcional</span></li>
+                      <li><strong>Fecha de Nacimiento:</strong> ('nacimiento') <span className="text-emerald-600/70 italic">- Opcional</span></li>
+                      <li><strong>Sede:</strong> ('sede', 'institucion') <span className="text-emerald-600/70 italic">- Opcional</span></li>
+                      <li><strong>Fecha de Inicio:</strong> ('inicio') <span className="text-emerald-600/70 italic">- Opcional</span></li>
+                    </ul>
+                    <p className="text-[10px] text-emerald-600 mt-2">Los campos opcionales tomarán valores por defecto del sistema si no se encuentran.</p>
+                  </div>
+
+                  <div className="border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center hover:bg-slate-50 transition-colors bg-white relative">
+                    <input 
+                      type="file" 
+                      accept=".xlsx, .xls"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      onChange={handleFileUpload}
+                    />
+                    <Upload className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <p className="text-sm font-bold text-slate-600">Haz clic o arrastra un archivo Excel aquí</p>
+                    <p className="text-[10px] text-slate-400 mt-2">Formatos válidos: .xlsx, .xls</p>
+                  </div>
+                  {importingState.error && (
+                    <div className="mt-4 p-3 bg-red-50 text-red-600 text-xs rounded-xl font-bold border border-red-200">
+                      {importingState.error}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {importingState.status === 'parsing' && (
+                <div className="text-center py-20">
+                  <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-sm font-bold text-slate-700">Analizando archivo Excel...</p>
+                </div>
+              )}
+
+              {importingState.status === 'preview' && (
+                <div>
+                  <div className="mb-4">
+                    <h4 className="text-lg font-black text-slate-800">Vista Previa de Importación</h4>
+                    <p className="text-sm text-slate-500">Se encontraron <strong>{importingState.total}</strong> estudiantes en el documento.</p>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[350px] overflow-y-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead className="bg-slate-100 text-[10px] font-black text-slate-500 uppercase sticky top-0 shadow-sm z-10">
+                        <tr>
+                          <th className="px-4 py-3">Documento</th>
+                          <th className="px-4 py-3">Nombre</th>
+                          <th className="px-4 py-3">Grado</th>
+                          <th className="px-4 py-3">Jornada</th>
+                          <th className="px-4 py-3">Sede</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {importingState.students.slice(0, 50).map((s, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 font-mono font-bold text-slate-600">{s.tipo_documento} {s.documento}</td>
+                            <td className="px-4 py-3 font-bold text-slate-800">{s.nombre_completo}</td>
+                            <td className="px-4 py-3 text-slate-500">{s.grado_texto}</td>
+                            <td className="px-4 py-3 text-slate-500">{s.jornada}</td>
+                            <td className="px-4 py-3 text-slate-500">{s.sede}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {importingState.students.length > 50 && (
+                      <div className="bg-slate-50 text-center py-2 text-xs font-bold text-slate-400 border-t border-slate-200">
+                        Mostrando los primeros 50 registros...
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {importingState.status === 'uploading' && (
+                <div className="text-center py-20">
+                  <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mx-auto mb-6"></div>
+                  <h4 className="text-lg font-black text-slate-800 mb-2">Registrando constancias...</h4>
+                  <p className="text-sm text-slate-500 mb-4">Guarda, actualiza y vincula datos automáticamente. No cierre el navegador.</p>
+                  
+                  <div className="w-full max-w-md mx-auto bg-slate-100 h-3 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                      className="bg-emerald-500 h-full rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${(importingState.progress / importingState.total) * 100}%` }}
+                    ></div>
+                  </div>
+                  <p className="mt-3 text-xs font-bold text-slate-600 font-mono bg-slate-100 inline-block px-3 py-1 rounded-lg border border-slate-200">
+                    {importingState.progress} / {importingState.total} ({Math.round((importingState.progress / importingState.total) * 100)}%)
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowImportModal(false)}
+                className="px-6 py-3 border border-slate-300 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-100 transition-colors"
+                disabled={importingState.status === 'uploading'}
+              >
+                Cancelar
+              </button>
+              
+              {importingState.status === 'preview' && (
+                <button
+                  type="button"
+                  onClick={handleExecuteImport}
+                  className="px-6 py-3 bg-emerald-600 text-white font-bold rounded-xl text-sm hover:bg-emerald-500 transition-colors flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+                >
+                  <Save className="w-4 h-4" />
+                  Procesar e Importar ({importingState.total})
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

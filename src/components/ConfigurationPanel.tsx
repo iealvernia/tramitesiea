@@ -74,6 +74,9 @@ export default function ConfigurationPanel({
   const [footerWebsite, setFooterWebsite] = useState('');
   const [footerCity, setFooterCity] = useState('');
   const [evalFechas, setEvalFechas] = useState<{ [key: number]: string }>({});
+  const [ihsConfig, setIhsConfig] = useState<{ [subject: string]: string }>({});
+  const [newSubject, setNewSubject] = useState('');
+  const [newIhs, setNewIhs] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [activeSubSection, setActiveSubSection] = useState<'all' | 'institucion' | 'google' | 'sistema'>('all');
 
@@ -97,6 +100,30 @@ export default function ConfigurationPanel({
       const storedWeb = localStorage.getItem('alvernia_footer_website') || 'www.ie-alvernia.edu.co';
       const storedCity = localStorage.getItem('alvernia_footer_city') || 'Puerto Asís - Putumayo';
       const storedFechas = localStorage.getItem('alvernia_habilitation_dates');
+      let storedIhs = JSON.parse(localStorage.getItem('iea_ihs_config') || '{}');
+      
+      if (Object.keys(storedIhs).length === 0) {
+        storedIhs = {
+          'LENGUA CASTELLANA': '5',
+          'MATEMÁTICAS': '5',
+          'CIENCIAS NATURALES': '4',
+          'CIENCIAS SOCIALES': '4',
+          'INGLÉS': '3',
+          'EDUCACIÓN FÍSICA': '2',
+          'TECNOLOGÍA E INFORMÁTICA': '2',
+          'EDUCACIÓN ARTÍSTICA': '2',
+          'ÉTICA Y VALORES': '1',
+          'EDUCACIÓN RELIGIOSA': '1',
+          'DIMENSIÓN COMUNICATIVA': '5',
+          'DIMENSIÓN COGNITIVA': '5',
+          'DIMENSIÓN CORPORAL': '3',
+          'DIMENSIÓN SOCIOAFECTIVA': '3',
+          'DIMENSIÓN ESTÉTICA': '2',
+          'DIMENSIÓN ÉTICA': '1',
+          'DIMENSIÓN ESPIRITUAL': '1'
+        };
+        localStorage.setItem('iea_ihs_config', JSON.stringify(storedIhs));
+      }
 
       setRectorName(storedName);
       setRectorDoc(storedDoc);
@@ -119,6 +146,7 @@ export default function ConfigurationPanel({
           setEvalFechas(JSON.parse(storedFechas));
         } catch (e) {}
       }
+      setIhsConfig(storedIhs);
     };
 
     loadLocal();
@@ -195,6 +223,7 @@ export default function ConfigurationPanel({
     localStorage.setItem('alvernia_footer_website', footerWebsite);
     localStorage.setItem('alvernia_footer_city', footerCity);
     localStorage.setItem('alvernia_habilitation_dates', JSON.stringify(evalFechas));
+    localStorage.setItem('iea_ihs_config', JSON.stringify(ihsConfig));
     localStorage.setItem('iea_config_customized', 'true');
 
     triggerGlobalRefresh();
@@ -235,6 +264,7 @@ export default function ConfigurationPanel({
     setFooterWebsite('www.ie-alvernia.edu.co');
     setFooterCity('Puerto Asís - Putumayo');
     setEvalFechas({});
+    setIhsConfig({});
 
     let logoBase64Reloaded = '';
     let sigBase64Reloaded = '';
@@ -508,6 +538,109 @@ export default function ConfigurationPanel({
                             required
                           />
                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* IHS Mapping Settings */}
+                  <div className="space-y-3">
+                    <p className="text-sm font-extrabold uppercase text-slate-500 tracking-wider mb-2 flex items-center gap-2 border-b border-slate-100 pb-2">
+                      <Database className="w-5 h-5 text-emerald-500" />
+                      Intensidad Horaria Semanal (IHS) Automática
+                    </p>
+                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                      <p className="text-sm text-slate-500 mb-4 leading-snug">
+                        Configura aquí las horas para cada materia. Cuando subas un archivo Excel al módulo de Certificados, 
+                        el sistema detectará la materia y le asignará automáticamente esta Intensidad Horaria Semanal.
+                      </p>
+                      
+                      <div className="flex gap-3 mb-5">
+                        <input 
+                          type="text" 
+                          placeholder="Materia (Ej. MATEMÁTICAS)" 
+                          value={newSubject}
+                          onChange={e => setNewSubject(e.target.value)}
+                          className="flex-1 p-3 border border-slate-300 rounded-xl text-sm uppercase"
+                        />
+                        <input 
+                          type="number" 
+                          placeholder="IHS" 
+                          value={newIhs}
+                          onChange={e => setNewIhs(e.target.value)}
+                          className="w-24 p-3 border border-slate-300 rounded-xl text-sm text-center"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (newSubject.trim() && newIhs.trim()) {
+                              const updated = { ...ihsConfig, [newSubject.trim().toUpperCase()]: newIhs.trim() };
+                              setIhsConfig(updated);
+                              setNewSubject('');
+                              setNewIhs('');
+                            }
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl text-sm font-bold transition-colors"
+                        >
+                          Añadir
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {Object.entries(ihsConfig).map(([subject, ihs], idx) => (
+                          <div key={`${subject}-${idx}`} className="flex justify-between items-center bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
+                            <input
+                              type="text"
+                              defaultValue={subject}
+                              onBlur={e => {
+                                const newSubj = e.target.value.toUpperCase().trim();
+                                if (newSubj !== subject && newSubj) {
+                                  const updated = { ...ihsConfig };
+                                  const val = updated[subject];
+                                  delete updated[subject];
+                                  updated[newSubj] = val;
+                                  setIhsConfig(updated);
+                                } else if (!newSubj) {
+                                  e.target.value = subject;
+                                }
+                              }}
+                              className="font-bold text-slate-700 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-emerald-400 outline-none w-full uppercase text-[10px] truncate mr-2"
+                              title={subject}
+                            />
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-1.5 py-0.5">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="20"
+                                  value={ihs}
+                                  onChange={e => {
+                                    const updated = { ...ihsConfig, [subject]: e.target.value };
+                                    setIhsConfig(updated);
+                                  }}
+                                  className="w-10 bg-white border border-slate-300 text-slate-800 px-1 py-0.5 rounded font-mono font-bold text-xs text-center focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                                />
+                                <span className="text-slate-400 font-bold text-[9px] uppercase">hrs</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = { ...ihsConfig };
+                                  delete updated[subject];
+                                  setIhsConfig(updated);
+                                }}
+                                className="text-rose-400 hover:text-rose-600 font-bold px-1 text-sm transition-colors"
+                                title="Eliminar materia"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {Object.keys(ihsConfig).length === 0 && (
+                          <p className="text-sm text-slate-400 italic text-center py-6 bg-white border border-slate-100 rounded-xl col-span-full">
+                            No hay materias configuradas. Añade una para comenzar.
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
