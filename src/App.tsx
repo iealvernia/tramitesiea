@@ -57,7 +57,6 @@ import {
 } from './lib/googleWorkspace';
 
 import { INITIAL_EMPLOYEES, INITIAL_NOVEDADES } from './data/mockData';
-import { supabase } from './lib/supabase';
 import ExcelImporter from './components/ExcelImporter';
 import ReportsPanel from './components/ReportsPanel';
 import ComputoPanel from './components/ComputoPanel';
@@ -191,18 +190,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUserSession(session);
-      setCheckingSession(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserSession(session);
-      setCheckingSession(false);
-    });
-
-    return () => subscription.unsubscribe();
+    const sessionStr = localStorage.getItem('alvernia_admin_session');
+    if (sessionStr) {
+      setUserSession(JSON.parse(sessionStr));
+    }
+    setCheckingSession(false);
   }, []);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -210,11 +202,18 @@ export default function App() {
     setLoginLoading(true);
     setLoginError(null);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password: loginPassword,
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword })
       });
-      if (error) throw error;
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Credenciales inválidas o problema de conexión.');
+      }
+      const session = { user: data.user };
+      localStorage.setItem('alvernia_admin_session', JSON.stringify(session));
+      setUserSession(session);
       showToast('¡Inicio de sesión exitoso!');
     } catch (err: any) {
       console.error('Error in login:', err);
@@ -225,7 +224,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    // Si es docente, solo limpiar currentTeacher (no requiere Supabase)
+    // Si es docente, solo limpiar currentTeacher
     if (currentTeacher) {
       setCurrentTeacher(null);
       setActiveTab('novedades');
@@ -234,15 +233,11 @@ export default function App() {
       showToast('Sesión de docente cerrada correctamente.');
       return;
     }
-    // Si es administrador, cerrar sesión en Supabase
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      setActiveTab('novedades');
-      showToast('Sesión cerrada correctamente.');
-    } catch (err: any) {
-      console.error('Error signing out:', err);
-    }
+    // Si es administrador, limpiar sesión local
+    localStorage.removeItem('alvernia_admin_session');
+    setUserSession(null);
+    setActiveTab('novedades');
+    showToast('Sesión cerrada correctamente.');
   };
 
   // --- Persistent Storage State ---

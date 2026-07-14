@@ -395,6 +395,32 @@ async function ensureDbTables() {
       );
     `);
 
+    // Create alvernia_admins table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS alvernia_admins (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
+    // Seed default admin if table is empty, or update if it was the old one
+    const { rows: admins } = await client.query('SELECT id, email FROM alvernia_admins LIMIT 1');
+    if (admins.length === 0) {
+      const defaultEmail = 'matriculas@alvernia.com';
+      const defaultPassword = 'admin';
+      const hash = crypto.createHash('sha256').update(defaultPassword).digest('hex');
+      await client.query(
+        'INSERT INTO alvernia_admins (id, email, password_hash) VALUES ($1, $2, $3)',
+        [crypto.randomUUID(), defaultEmail, hash]
+      );
+      console.log('Seeded default admin user');
+    } else if (admins[0].email === 'osjuliansc@gmail.com') {
+      await client.query("UPDATE alvernia_admins SET email = 'matriculas@alvernia.com' WHERE email = 'osjuliansc@gmail.com'");
+      console.log('Updated default admin email to matriculas@alvernia.com');
+    }
+
     console.log("CockroachDB tables are verified/created successfully.");
   } catch (err: any) {
     console.error("Error ensuring CockroachDB tables:", err);
@@ -448,6 +474,28 @@ function getS3Client(): S3Client | null {
 // --- API ENDPOINTS ---
 
 // Check backend status and DB/R2 configuration
+app.post("/api/login", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(500).json({ error: "Database not connected" });
+  
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Email y contraseña son requeridos" });
+
+  try {
+    const hash = crypto.createHash('sha256').update(password).digest('hex');
+    const { rows } = await pool.query("SELECT * FROM alvernia_admins WHERE email = $1 AND password_hash = $2", [email, hash]);
+    
+    if (rows.length > 0) {
+      return res.json({ success: true, user: { email: rows[0].email } });
+    } else {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
+  } catch (err) {
+    console.error("Login error:", err);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
 app.get("/api/health", async (req, res) => {
   const dbConfigured = !!process.env.COCKROACH_DB_URL;
   const r2Configured = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME);

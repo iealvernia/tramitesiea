@@ -255,474 +255,223 @@ export default function MatriculasPanel({ showToast }: { showToast?: (msg: strin
   };
 
   // Generate gorgeous ficha PDF using html2pdf
-  const handlePrint = async (s: StudentMatricula) => {
-    const html2pdf = (window as any).html2pdf;
-    if (!html2pdf) {
-      alert('La librería de descargas PDF está cargando. Intente de nuevo en un segundo.');
-      return;
-    }
+import { jsPDF } from 'jspdf';
 
-    // Show a loading toast immediately to improve perceived performance
-    if (showToast) showToast('Generando Ficha en PDF. Por favor espere un momento...');
-
+const handlePrint = async (s: StudentMatricula) => {
+    if (showToast) showToast('Generando Ficha de Matrícula...');
+    
+    // Use native jsPDF for instant, lag-free PDF generation
+    const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' });
     const val = (v: any) => (v || "").toString().toUpperCase();
     
-    // Retrieve centralized institutional values (from GlobalConfigPanel)
-    const customLogoBase64 = localStorage.getItem('iea_custom_logo') || '';
-
-    // Inline ficha matricula style layout strictly replicating the requested grid sections and colors
-    const template = `
-      <html>
-      <head>
-      <meta charset="utf-8">
-      <style>
-        body { 
-          margin:0; 
-          font-family: 'Segoe UI', Arial, sans-serif; 
-          font-size:10px; 
-          background:#fff;
-          color: #111111;
-          line-height: 1.25;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-        .sheet { 
-          width:100%; 
-          margin:0 auto; 
-          padding:0px;
-          box-sizing: border-box;
-        }
-        .card { 
-          border:none; 
-          border-radius:0; 
-          padding: 0mm 1mm; 
-          box-sizing:border-box;
-          background: #fff;
-          box-shadow: none;
-        }
-
-        .encabezado { 
-          display: grid; 
-          grid-template-columns: 80px 1fr 80px; 
-          align-items: center; 
-          margin-bottom: 6px;
-        }
-         .logo { 
-          height: 68px; 
-          width: 68px;
-          object-fit: contain;
-        }
-         .logo-placeholder {
-          width: 65px;
-          height: 65px;
-          border: 1.5px solid #5d8aa8;
-          border-radius: 50%;
-          background: #fafcfd;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 800;
-          font-size: 15px;
-          color: #5d8aa8;
-        }
-         .titulo { 
-          text-align: center; 
-          font-weight: 700;
-        }
-         .titulo .inst { 
-          font-size: 16px; 
-          color: #1e3a8a; 
-          margin-bottom: 2px;
-          font-weight: 800;
-          letter-spacing: 0.2px;
-        }
-         .titulo .ficha { 
-          font-size: 13px; 
-          margin-top: 4px;
-          background: #5d8aa8; 
-          color: white;
-          padding: 4px 22px;
-          border-radius: 12px;
-          display: inline-block;
-          font-weight: bold;
-          text-transform: uppercase;
-          letter-spacing: 0.4px;
-        }
-         .titulo div {
-          font-size: 9px;
-          color: #334155; 
-          line-height: 1.25;
-          font-weight: 700;
-        }
-         .foto { 
-          height: 80px; 
-          width: 72px;
-          border: 1.2px solid #5d8aa8; 
-          border-radius: 6px; 
-          display: flex; 
-          align-items: center; 
-          justify-content: center; 
-          font-size: 11px;
-          background: #fdfdfd; 
-          font-weight: bold;
-          color: #5d8aa8;
-          margin-left: auto;
-        }
- 
-         /* Group containers and elements */
-         .box { 
-          border: 1.5px solid #5d8aa8; 
-          border-radius: 6px; 
-          overflow: hidden; 
-          margin-bottom: 7px; 
-          background: #fff;
-        }
-         .title { 
-          background: #5d8aa8; 
-          color: white; 
-          font-weight: bold; 
-          font-size: 11px; 
-          padding: 4.5px; 
-          text-align: center; 
-          text-transform: uppercase; 
-          letter-spacing: 0.4px;
-        }
-         .row { 
-          display: flex; 
-          gap: 6px; 
-          padding: 5.5px 8px; 
-          background: #fff;
-        }
-         
-         /* Individual modular input fields */
-         .fld { 
-          flex: 1; 
-          display: flex; 
-          flex-direction: column; 
-          align-items: center; 
-          justify-content: flex-start; 
-          text-align: center;
-          min-width: 0;
-        }
-         .lbl { 
-          font-size: 8.5px; 
-          font-weight: bold; 
-          color: #334155; 
-          margin-bottom: 2px; 
-          text-transform: uppercase;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          line-height: 1.1;
-        }
-         .val { 
-          background: #f4f9fc; 
-          border: 1px solid #5d8aa8; 
-          border-radius: 4px; 
-          padding: 4px 4px; 
-          font-size: 11.5px; 
-          font-weight: normal; 
-          color: #000000; 
-          text-align: center; 
-          width: 100%; 
-          box-sizing: border-box; 
-          min-height: 25px; 
-          display: flex; 
-          align-items: center; 
-          justify-content: center; 
-          text-transform: uppercase;
-        }
- 
-         /* Checkbox rows */
-         .row-cb { 
-          display: grid; 
-          grid-template-columns: repeat(4, 1fr); 
-          gap: 6px; 
-          padding: 5px 8px; 
-          background: #fff;
-        }
-         .cb { 
-          display: flex; 
-          align-items: center; 
-          font-size: 10.5px; 
-          font-weight: bold; 
-          color: #1e293b;
-        }
-         .sq { 
-          width: 13px; 
-          height: 13px; 
-          border: 1.2px solid #5d8aa8; 
-          border-radius: 2px; 
-          margin-right: 6px; 
-          background: #fff; 
-          flex-shrink: 0;
-        }
- 
-         /* Double side panels */
-         .double-col { 
-          display: flex; 
-          gap: 12px; 
-          margin-bottom: 7px; 
-          background: #fff;
-        }
-         .pane { 
-          border: 1.5px solid #5d8aa8; 
-          border-radius: 6px; 
-          padding: 7px; 
-          background: #fff; 
-          flex: 1;
-        }
-         .pane-t { 
-          font-size: 11px; 
-          font-weight: bold; 
-          color: #5d8aa8; 
-          text-align: center; 
-          padding-bottom: 4px; 
-          border-bottom: 1.2px solid #5d8aa8; 
-          text-transform: uppercase; 
-          margin-bottom: 7px;
-          letter-spacing: 0.3px;
-        }
-         .p-row { 
-          display: flex; 
-          justify-content: space-between; 
-          align-items: center; 
-          margin-bottom: 5.5px; 
-          font-size: 10px;
-        }
-         .p-opt { 
-          color: #334155; 
-          font-weight: bold;
-        }
-         .p-btn { 
-          display: flex; 
-          gap: 5px;
-        }
-         .p-box { 
-          width: 28px; 
-          height: 17px; 
-          border: 1.2px solid #5d8aa8; 
-          border-radius: 3.5px; 
-          font-size: 9.5px; 
-          font-weight: bold; 
-          display: flex; 
-          align-items: center; 
-          justify-content: center; 
-          color: #5d8aa8; 
-          background: #fff;
-        }
-      </style>
-      </head>
-      <body>
-      <div class="sheet">
-      <div class="card">
-
-        <!-- Encabezado -->
-        <div class="encabezado">
-          <div>
-            ${customLogoBase64 ? `
-              <img src="${customLogoBase64}" class="logo" alt="Logo" />
-            ` : `
-              <div class="logo-placeholder">ALV</div>
-            `}
-          </div>
-          <div class="titulo">
-            <div class="inst">INSTITUCIÓN EDUCATIVA ALVERNIA</div>
-            <div>NIVEL PREESCOLAR - BÁSICA PRIMARIA Y MEDIA ACADÉMICA</div>
-            <div>CALENDARIO A - CÓDIGO DANE 186568000567 NIT. 891201897-5</div>
-            <div>Dirección: Calle 16 Nro. 12-77 • B/ San Martín • Tel. 4227048</div>
-            <div><span class="ficha">FICHA DE MATRÍCULA</span></div>
-          </div>
-          <div class="foto">FOTO</div>
-        </div>
-
-        <!-- Matrícula -->
-        <div class="box">
-          <div class="title">DATOS DE MATRÍCULA</div>
-          <div class="row">
-            <div class="fld"><div class="lbl">SEDE</div><div class="val">${val(s.sede)}</div></div>
-            <div class="fld"><div class="lbl">NIVEL EDUCATIVO</div><div class="val">${val(s.nivelEducativo)}</div></div>
-            <div class="fld"><div class="lbl">GRADO</div><div class="val">${val(s.grado)}</div></div>
-            <div class="fld"><div class="lbl">JORNADA</div><div class="val">${val(s.jornada)}</div></div>
-            <div class="fld"><div class="lbl">FECHA MATRÍCULA</div><div class="val">${val(s.fechaMatricula)}</div></div>
-          </div>
-        </div>
-
-        <!-- Estudiante -->
-        <div class="box">
-          <div class="title">DATOS DEL ESTUDIANTE</div>
-          <div class="row" style="padding-bottom:3px;">
-            <div class="fld"><div class="lbl">PRIMER APELLIDO</div><div class="val">${val(s.primerApellido)}</div></div>
-            <div class="fld"><div class="lbl">SEGUNDO APELLIDO</div><div class="val">${val(s.segundoApellido) || '-'}</div></div>
-            <div class="fld"><div class="lbl">PRIMER NOMBRE</div><div class="val">${val(s.primerNombre)}</div></div>
-            <div class="fld"><div class="lbl">SEGUNDO NOMBRE</div><div class="val">${val(s.segundoNombre) || '-'}</div></div>
-            <div class="fld"><div class="lbl">TIPO DOC.</div><div class="val">${val(s.tipoDocumento)}</div></div>
-          </div>
-          
-          <div class="row" style="padding-top:3px; padding-bottom:3px;">
-            <div class="fld"><div class="lbl">NRO DOC.</div><div class="val">${val(s.numeroDocumento)}</div></div>
-            <div class="fld"><div class="lbl">FECHA NAC.</div><div class="val">${val(s.fechaNacimiento)}</div></div>
-            <div class="fld"><div class="lbl">SEXO</div><div class="val">${val(s.sexo)}</div></div>
-            <div class="fld"><div class="lbl">ESTRATO</div><div class="val">${val(s.estrato) || '-'}</div></div>
-            <div class="fld"><div class="lbl">TIPO DE SANGRE</div><div class="val">${val(s.tipoSangre) || '-'}</div></div>
-          </div>
-
-          <div class="row" style="padding-top:3px; padding-bottom:3px;">
-            <div class="fld"><div class="lbl">MUNICIPIO</div><div class="val">${val(s.municipioResidencia)}</div></div>
-            <div class="fld"><div class="lbl">DIRECCIÓN</div><div class="val">${val(s.direccionResidencia) || '-'}</div></div>
-            <div class="fld"><div class="lbl">TELÉFONO</div><div class="val">${val(s.telefonoCelular) || '-'}</div></div>
-            <div class="fld"><div class="lbl">EPS</div><div class="val">${val(s.epsAfiliacion) || '-'}</div></div>
-            <div class="fld"><div class="lbl">GRUPO ÉTNICO</div><div class="val">${val(s.grupoEtnico) || 'NINGUNO'}</div></div>
-          </div>
-
-          <div class="row" style="padding-top:3px; padding-bottom:3px;">
-            <div class="fld"><div class="lbl">CON QUIÉN VIVE</div><div class="val">${val(s.viveCon) || 'PADRES'}</div></div>
-            <div class="fld"><div class="lbl">REPITENTE</div><div class="val">${val(s.repitente) || 'NO'}</div></div>
-            <div class="fld"><div class="lbl">DISCAPACIDAD</div><div class="val">${val(s.discapacidad) || 'NO'}</div></div>
-            <div class="fld"><div class="lbl">ESTUDIÓ AÑO ANT.</div><div class="val">${val(s.estudioAnterior) || 'SÍ'}</div></div>
-            <div class="fld"><div class="lbl">N° HERMANOS/AS</div><div class="val">${val(s.numHermanos) || '0'}</div></div>
-          </div>
-
-          <div class="row" style="padding-top:3px;">
-            <div class="fld" style="flex:2;"><div class="lbl">INSTITUCIÓN ANTERIOR</div><div class="val" style="font-size:10px;">${val(s.institucionAnterior) || '-'}</div></div>
-            <div class="fld" style="flex:1;"><div class="lbl">GRADOS</div><div class="val">${val(s.grados) || 'NO APLICA'}</div></div>
-            <div class="fld" style="flex:2;"><div class="lbl">CORREO ESTUDIANTE</div><div class="val" style="font-size:10.5px; text-transform:lowercase;">${(s.correoEstudiante || '-').toLowerCase()}</div></div>
-          </div>
-        </div>
-
-        <!-- Acudiente -->
-        <div class="box">
-          <div class="title">DATOS DEL ACUDIENTE</div>
-          <div class="row" style="padding-bottom:3px;">
-            <div class="fld"><div class="lbl">APELLIDOS</div><div class="val">${val(s.acudienteApellidos)}</div></div>
-            <div class="fld"><div class="lbl">NOMBRES</div><div class="val">${val(s.acudienteNombres)}</div></div>
-            <div class="fld"><div class="lbl">NRO DOCUMENTO</div><div class="val">${val(s.acudienteDocumento)}</div></div>
-            <div class="fld"><div class="lbl">TELÉFONO</div><div class="val">${val(s.acudienteTelefono)}</div></div>
-            <div class="fld"><div class="lbl">MUNICIPIO</div><div class="val">${val(s.acudienteMunicipio) || 'PUERTO ASÍS'}</div></div>
-          </div>
-          
-          <div class="row" style="padding-top:3px;">
-            <div class="fld" style="flex:2;"><div class="lbl">DIRECCIÓN</div><div class="val">${val(s.acudienteDireccion) || '-'}</div></div>
-            <div class="fld" style="flex:1;"><div class="lbl">PARENTESCO</div><div class="val">${val(s.acudienteParentesco) || '-'}</div></div>
-            <div class="fld" style="flex:2;"><div class="lbl">PROFESIÓN</div><div class="val">${val(s.acudienteProfesion) || '-'}</div></div>
-          </div>
-        </div>
-
-        <!-- Renovación -->
-        <div class="box">
-          <div class="title">RENOVACIÓN DE MATRÍCULA (Marque con una X)</div>
-          <table style="width: 100%; border-collapse: collapse; text-align: center; background: #fff;">
-            <tr style="border-bottom: 1.2px solid #5d8aa8;">
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155; width: 14.28%;">2026</td>
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155; width: 14.28%;">2027</td>
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155; width: 14.28%;">2028</td>
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155; width: 14.28%;">2029</td>
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155; width: 14.28%;">2030</td>
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155; width: 14.28%;">2031</td>
-              <td style="padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155; width: 14.28%;">2032</td>
-            </tr>
-            <tr style="height: 20px;">
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155;">2033</td>
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155;">2034</td>
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155;">2035</td>
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155;">2036</td>
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155;">2037</td>
-              <td style="border-right: 1.2px solid #5d8aa8; padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155;">2038</td>
-              <td style="padding: 4px; font-size: 9.5px; font-weight: bold; color: #334155;">2039</td>
-            </tr>
-          </table>
-        </div>
-
-        <!-- Retiro -->
-        <div class="box">
-          <div class="title">SOLICITUD DE RETIRO Y CAUSAS</div>
-          <div class="row">
-            <div class="fld" style="flex:1;"><div class="lbl">FECHA RETIRO</div><div class="val" style="min-height:22px; background:#fff;"></div></div>
-            <div class="fld" style="flex:2;"><div class="lbl">NOMBRE QUIEN SOLICITA</div><div class="val" style="min-height:22px; background:#fff;"></div></div>
-            <div class="fld" style="flex:2;"><div class="lbl">FIRMA QUIEN SOLICITA</div><div class="val" style="min-height:22px; background:#fff;"></div></div>
-          </div>
-          
-          <div style="background: #89b4c4; color: white; font-weight: bold; font-size: 9.5px; padding: 4.5px; text-align: center; text-transform: uppercase; border-top: 1.2px solid #5d8aa8; letter-spacing: 0.3px;">MARQUE CON UNA X EL MOTIVO</div>
-          <div class="row-cb">
-            <div class="cb"><div class="sq"></div> CAMBIO DOMICILIO</div>
-            <div class="cb"><div class="sq"></div> SITUACIÓN ECONÓMICA</div>
-            <div class="cb"><div class="sq"></div> SANCIÓN INSTITUCIONAL</div>
-            <div class="cb"><div class="sq"></div> TRASLADO</div>
-            <div class="cb"><div class="sq"></div> BAJO RENDIMIENTO</div>
-            <div class="cb"><div class="sq"></div> SALUD</div>
-            <div class="cb"><div class="sq"></div> OTRO</div>
-            <div></div>
-          </div>
-        </div>
-
-        <!-- Matrícula condicional + documentos habilitantes -->
-        <div class="double-col">
-          
-          <!-- Tipo de matrícula -->
-          <div class="pane">
-            <div class="pane-t">TIPO DE MATRÍCULA</div>
-            <div class="p-row"><div class="p-opt">Matrícula Condicional</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-            <div class="p-row"><div class="p-opt">Antecedentes conductuales</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-            <div class="p-row"><div class="p-opt">Inasistencia reiterada</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-            <div class="p-row"><div class="p-opt">Atención especializada</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-            <div class="p-row"><div class="p-opt">Colaborar con actividades</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-            <div class="p-row" style="margin-bottom:0;"><div class="p-opt">No Aplica</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-          </div>
-
-          <!-- Documentos habilitantes -->
-          <div class="pane">
-            <div class="pane-t">DOCUMENTOS HABILITANTES QUE PRESENTA</div>
-            <div class="p-row"><div class="p-opt">Copia Registro Civil</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-            <div class="p-row"><div class="p-opt">Tarjeta Identidad / Cédula Estudiante</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-            <div class="p-row"><div class="p-opt">Cédula Acudiente</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-            <div class="p-row"><div class="p-opt">Certificado / Carnet Salud</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-            <div class="p-row"><div class="p-opt">Recibo Energía</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-            <div class="p-row" style="margin-bottom:0;"><div class="p-opt">2 Fotos Carnet</div><div class="p-btn"><div class="p-box">SI</div><div class="p-box">NO</div></div></div>
-          </div>
-
-        </div>
-
-        <!-- Firmas con líneas superiores independientes -->
-        <div style="margin-top: 60px; display: flex; justify-content: space-around; padding: 0 40px; margin-bottom: 5px;">
-          <div style="width: 38%; border-top: 1.5px solid #5d8aa8; text-align: center; padding-top: 6px; font-size: 11px; font-weight: bold; color: #5d8aa8; position: relative;">
-            Firma Estudiante
-          </div>
-          <div style="width: 38%; border-top: 1.5px solid #5d8aa8; text-align: center; padding-top: 6px; font-size: 11px; font-weight: bold; color: #5d8aa8; position: relative;">
-            Firma Acudiente
-          </div>
-        </div>
-
-      </div>
-      </div>
-      </body>
-      </html>
-    `;
-
-    const opt = {
-      margin: [2.5, 7, 2.5, 7],
-      filename: `Ficha_Matricula_${s.numeroDocumento || 'Ficha'}.pdf`,
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { 
-        scale: 1.5, 
-        useCORS: false, 
-        scrollY: 0, 
-        logging: false,
-        // Removed imageTimeout to prevent artificial delays with base64 images
-      },
-      jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' }
+    // Fonts and colors
+    const primaryColor = [93, 138, 168]; // #5d8aa8
+    const textColor = [51, 65, 85]; // #334155
+    
+    // Helpers
+    const drawSectionTitle = (y: number, title: string) => {
+      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(10, y, 196, 6, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(title, 108, y + 4.5, { align: "center" });
+    };
+    
+    const drawField = (x: number, y: number, w: number, h: number, label: string, value: string) => {
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(x, y, w, h);
+      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(x, y, w, 4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.text(label, x + (w/2), y + 3, { align: "center" });
+      doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      // center value
+      const splitVal = doc.splitTextToSize(value, w - 2);
+      doc.text(splitVal, x + (w/2), y + 8, { align: "center" });
     };
 
-    try {
-      // html2canvas needs the element to be in the DOM to compute dimensions properly.
-      // `from(template)` handles this internally by creating a hidden iframe.
-      await html2pdf().set(opt).from(template).save();
-    } catch (err) {
-      console.error("Error generating ficha PDF:", err);
-      if (showToast) showToast('Error al generar el PDF.');
+    // Header
+    const customLogoBase64 = localStorage.getItem('iea_custom_logo') || '';
+    if (customLogoBase64) {
+      try { doc.addImage(customLogoBase64, "PNG", 10, 10, 20, 20); } catch(e){}
+    } else {
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.circle(20, 20, 10);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.setFontSize(12);
+      doc.text("ALV", 20, 21.5, { align: "center" });
     }
+    
+    doc.setTextColor(30, 58, 138); // #1e3a8a
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("INSTITUCIÓN EDUCATIVA ALVERNIA", 108, 15, { align: "center" });
+    
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+    doc.setFontSize(8);
+    doc.text("NIVEL PREESCOLAR - BÁSICA PRIMARIA Y MEDIA ACADÉMICA", 108, 20, { align: "center" });
+    doc.text("CALENDARIO A - CÓDIGO DANE 186568000567 NIT. 891201897-5", 108, 24, { align: "center" });
+    doc.text("Dirección: Calle 16 Nro. 12-77 • B/ San Martín • Tel. 4227048", 108, 28, { align: "center" });
+    
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.roundedRect(88, 30, 40, 5, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.text("FICHA DE MATRÍCULA", 108, 33.5, { align: "center" });
+    
+    // Foto Box
+    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.roundedRect(180, 10, 26, 30, 1, 1);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text("FOTO", 193, 26, { align: "center" });
+
+    // 1. DATOS DE MATRÍCULA
+    let startY = 45;
+    drawSectionTitle(startY, "DATOS DE MATRÍCULA");
+    drawField(10, startY + 7, 39, 12, "SEDE", val(s.sede));
+    drawField(49, startY + 7, 39, 12, "NIVEL EDUCATIVO", val(s.nivelEducativo));
+    drawField(88, startY + 7, 39, 12, "GRADO", val(s.grado));
+    drawField(127, startY + 7, 39, 12, "JORNADA", val(s.jornada));
+    drawField(166, startY + 7, 40, 12, "FECHA MATRÍCULA", val(s.fechaMatricula));
+
+    // 2. DATOS DEL ESTUDIANTE
+    startY = 68;
+    drawSectionTitle(startY, "DATOS DEL ESTUDIANTE");
+    drawField(10, startY + 7, 39, 12, "PRIMER APELLIDO", val(s.primerApellido));
+    drawField(49, startY + 7, 39, 12, "SEGUNDO APELLIDO", val(s.segundoApellido) || '-');
+    drawField(88, startY + 7, 39, 12, "PRIMER NOMBRE", val(s.primerNombre));
+    drawField(127, startY + 7, 39, 12, "SEGUNDO NOMBRE", val(s.segundoNombre) || '-');
+    drawField(166, startY + 7, 40, 12, "TIPO DOC.", val(s.tipoDocumento));
+    
+    drawField(10, startY + 20, 39, 12, "NRO DOC.", val(s.numeroDocumento));
+    drawField(49, startY + 20, 39, 12, "FECHA NAC.", val(s.fechaNacimiento));
+    drawField(88, startY + 20, 39, 12, "SEXO", val(s.sexo));
+    drawField(127, startY + 20, 39, 12, "ESTRATO", val(s.estrato) || '-');
+    drawField(166, startY + 20, 40, 12, "TIPO DE SANGRE", val(s.tipoSangre) || '-');
+    
+    drawField(10, startY + 33, 39, 12, "MUNICIPIO", val(s.municipioResidencia));
+    drawField(49, startY + 33, 39, 12, "DIRECCIÓN", val(s.direccionResidencia) || '-');
+    drawField(88, startY + 33, 39, 12, "TELÉFONO", val(s.telefonoCelular) || '-');
+    drawField(127, startY + 33, 39, 12, "EPS", val(s.epsAfiliacion) || '-');
+    drawField(166, startY + 33, 40, 12, "GRUPO ÉTNICO", val(s.grupoEtnico) || 'NINGUNO');
+
+    drawField(10, startY + 46, 39, 12, "CON QUIÉN VIVE", val(s.viveCon) || 'PADRES');
+    drawField(49, startY + 46, 39, 12, "REPITENTE", val(s.repitente) || 'NO');
+    drawField(88, startY + 46, 39, 12, "DISCAPACIDAD", val(s.discapacidad) || 'NINGUNA');
+    drawField(127, startY + 46, 79, 12, "ESTUDIO ANTERIOR (AÑOS)", val(s.estudioAnterior) || '-');
+
+    drawField(10, startY + 59, 117, 12, "INSTITUCIÓN DONDE ESTUDIÓ EL AÑO ANTERIOR", val(s.institucionAnterior) || '-');
+    drawField(127, startY + 59, 39, 12, "N° HERMANOS", val(s.numHermanos) || '-');
+    drawField(166, startY + 59, 40, 12, "GRADOS QUE CURSAN", val(s.grados) || '-');
+
+    // 3. DATOS DEL ACUDIENTE
+    startY = 143;
+    drawSectionTitle(startY, "DATOS DEL ACUDIENTE");
+    drawField(10, startY + 7, 39, 12, "PRIMER APELLIDO", val(s.acudienteApellidos?.split(' ')[0]) || val(s.acudienteApellidos));
+    drawField(49, startY + 7, 39, 12, "SEGUNDO APELLIDO", val(s.acudienteApellidos?.split(' ').slice(1).join(' ')) || '-');
+    drawField(88, startY + 7, 39, 12, "NOMBRES", val(s.acudienteNombres));
+    drawField(127, startY + 7, 39, 12, "CÉDULA", val(s.acudienteDocumento));
+    drawField(166, startY + 7, 40, 12, "TELÉFONO", val(s.acudienteTelefono));
+
+    drawField(10, startY + 20, 39, 12, "MUNICIPIO", val(s.acudienteMunicipio) || 'PUERTO ASÍS');
+    drawField(49, startY + 20, 78, 12, "DIRECCIÓN", val(s.acudienteDireccion) || '-');
+    drawField(127, startY + 20, 39, 12, "PARENTESCO", val(s.acudienteParentesco) || '-');
+    drawField(166, startY + 20, 40, 12, "PROFESIÓN", val(s.acudienteProfesion) || '-');
+
+    // 4. RENOVACIÓN DE MATRÍCULA
+    startY = 181;
+    drawSectionTitle(startY, "RENOVACIÓN DE MATRÍCULA (Marque con una X)");
+    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(10, startY + 7, 196, 16);
+    doc.line(10, startY + 15, 206, startY + 15);
+    for(let i=1; i<7; i++) {
+      doc.line(10 + (28 * i), startY + 7, 10 + (28 * i), startY + 23);
+    }
+    const yearsRow1 = [2026, 2027, 2028, 2029, 2030, 2031, 2032];
+    const yearsRow2 = [2033, 2034, 2035, 2036, 2037, 2038, 2039];
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    yearsRow1.forEach((y, i) => doc.text(y.toString(), 10 + (28 * i) + 14, startY + 12, { align: "center" }));
+    yearsRow2.forEach((y, i) => doc.text(y.toString(), 10 + (28 * i) + 14, startY + 20, { align: "center" }));
+
+    // 5. SOLICITUD DE RETIRO Y CAUSAS
+    startY = 208;
+    drawSectionTitle(startY, "SOLICITUD DE RETIRO Y CAUSAS");
+    drawField(10, startY + 7, 49, 12, "FECHA RETIRO", "");
+    drawField(59, startY + 7, 73, 12, "NOMBRE QUIEN SOLICITA", "");
+    drawField(132, startY + 7, 74, 12, "FIRMA QUIEN SOLICITA", "");
+    
+    doc.setFillColor(137, 180, 196); // #89b4c4
+    doc.rect(10, startY + 20, 196, 5, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7);
+    doc.text("MARQUE CON UNA X EL MOTIVO", 108, startY + 23.5, { align: "center" });
+    
+    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(10, startY + 25, 196, 10);
+    const motivos = ["CAMBIO DOMICILIO", "SITUACIÓN ECONÓMICA", "SANCIÓN INSTITUCIONAL", "TRASLADO", "BAJO RENDIMIENTO", "SALUD", "OTRO"];
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+    motivos.forEach((m, i) => {
+      doc.rect(12 + (26 * i), startY + 27, 4, 4);
+      doc.text(m, 17 + (26 * i), startY + 30);
+    });
+
+    // 6. FIRMAS Y TIPO DE MATRÍCULA
+    doc.addPage();
+    
+    const drawCheckRow = (x: number, y: number, label: string) => {
+      doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(label, x + 2, y + 4);
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(x + 75, y, 7, 5);
+      doc.text("SI", x + 76.5, y + 3.5);
+      doc.rect(x + 84, y, 7, 5);
+      doc.text("NO", x + 85, y + 3.5);
+    };
+
+    drawSectionTitle(10, "TIPO DE MATRÍCULA");
+    doc.rect(10, 17, 95, 45);
+    drawCheckRow(10, 20, "Matrícula Condicional");
+    drawCheckRow(10, 27, "Antecedentes conductuales");
+    drawCheckRow(10, 34, "Inasistencia reiterada");
+    drawCheckRow(10, 41, "Atención especializada");
+    drawCheckRow(10, 48, "Colaborar con actividades");
+    drawCheckRow(10, 55, "No Aplica");
+
+    drawSectionTitle(10, "DOCUMENTOS HABILITANTES QUE PRESENTA"); // Fakes position for right col
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(111, 10, 95, 6, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7.5);
+    doc.text("DOCUMENTOS HABILITANTES QUE PRESENTA", 158.5, 14.5, { align: "center" });
+    doc.rect(111, 17, 95, 45);
+    drawCheckRow(111, 20, "Copia Registro Civil");
+    drawCheckRow(111, 27, "Tarjeta Identidad / Cédula Estudiante");
+    drawCheckRow(111, 34, "Cédula Acudiente");
+    drawCheckRow(111, 41, "Certificado / Carnet Salud");
+    drawCheckRow(111, 48, "Recibo Energía");
+    drawCheckRow(111, 55, "2 Fotos Carnet");
+
+    // Firmas
+    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.line(30, 95, 80, 95);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFont("helvetica", "bold");
+    doc.text("Firma Estudiante", 55, 100, { align: "center" });
+
+    doc.line(130, 95, 180, 95);
+    doc.text("Firma Acudiente", 155, 100, { align: "center" });
+
+    doc.save(`Ficha_Matricula_${s.numeroDocumento || 'Ficha'}.pdf`);
   };
 
-  // Filter students array based on filters & queries
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const nameMatch = `${s.primerNombre} ${s.segundoNombre} ${s.primerApellido} ${s.segundoApellido}`.toLowerCase().includes(searchQuery.toLowerCase()) || 

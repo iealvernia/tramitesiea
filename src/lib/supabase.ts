@@ -1,12 +1,18 @@
-import { createClient } from '@supabase/supabase-js';
+// Archivo simulado (Mock) para eliminar la dependencia de Supabase
+// Todos los métodos retornan respuestas vacías o exitosas simuladas
+// para no romper la interfaz de usuario en los componentes que aún lo importan.
 
-const SUPABASE_URL = 'https://odvgmujuhgktfgrtzxwv.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kdmdtdWp1aGdrdGZncnR6eHd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAxNjYzNTQsImV4cCI6MjA3NTc0MjM1NH0.WgYUziTE30h5s35wAw91VAkgM000gm-w3x0agY9pe5c';
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+export const supabase = {
   auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  }
-});
+    getSession: async () => ({ data: { session: null } }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+    signInWithPassword: async () => ({ error: { message: 'Supabase desactivado' } }),
+    signOut: async () => ({ error: null })
+  },
+  from: (table: string) => ({
+    select: () => ({ limit: () => ({ data: null, error: null }), eq: () => ({ data: null, error: null }) }),
+    upsert: async () => ({ data: null, error: null }),
+    delete: () => ({ eq: async () => ({ data: null, error: null }) }),
+    insert: async () => ({ data: null, error: null })
+  })
+};
