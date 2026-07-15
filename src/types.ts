@@ -146,6 +146,39 @@ export const TIPOS_NOMBRAMIENTO_OPCIONES = [
   'Provisional Temporal'
 ] as const;
 
+export interface Responsable {
+  id: string;
+  nombre: string;
+  cargo: string;
+  fecha_inicio_firma: string;
+  fecha_fin_firma: string;
+  activo: boolean;
+  firma_imagen?: string; // base64 o URL
+}
+
+export interface Caja {
+  id: string;
+  nombre: string;
+  activa: boolean;
+  user_id?: string;
+  created_at?: string;
+}
+
+export interface CajaTransaccion {
+  id: string;
+  caja_id: string;
+  tipo_operacion: 'Entrada' | 'Salida';
+  fecha: string;
+  categoria: string;
+  concepto: string;
+  valor: number;
+  mes: string;
+  ano: string;
+  tercero?: string;
+  comprobante?: string;
+  created_at?: string;
+}
+
 export interface AgendaEvento {
   id: string;
   titulo: string;

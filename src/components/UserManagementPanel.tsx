@@ -13,6 +13,7 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'CERTIFICADOS_PAMA', label: 'Certificados PAMA' },
   { id: 'CONSTANCIAS', label: 'Constancias de Estudio' },
   { id: 'EVALUACION', label: 'Evaluación Docente 1278' },
+  { id: 'CAJAMENOR', label: 'Caja Menor' },
   { id: 'CONFIGURACION', label: 'Configuración General' }
 ];
 

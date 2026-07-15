@@ -30,7 +30,8 @@ import {
   FileText,
   Pencil,
   Eye,
-  EyeOff
+  EyeOff,
+  Wallet
 } from 'lucide-react';
 
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -48,6 +49,7 @@ import {
 } from './types';
 
 import { EvaluacionDocentePanel } from './components/EvaluacionDocentePanel';
+import { CajaMenorPanel } from './components/CajaMenorPanel';
 
 import { 
   signInWithGoogleWorkspace, 
@@ -662,36 +664,52 @@ export default function App() {
     };
   }, []);
 
-  // --- Active Subview State ---
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'novedades' | 'empleados' | 'reportes' | 'computo' | 'matriculas' | 'certificados' | 'certificadosPama' | 'constancias' | 'configuracion' | 'agenda' | 'consecutivos' | 'evaluacionDocente'>('dashboard');
-
   // --- URL Routing Sync ---
   const location = useLocation();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const currentPath = location.pathname;
-    const pathToTab: Record<string, string> = {
-      '/dashboard': 'dashboard',
-      '/permisos': 'novedades',
-      '/personal': 'empleados',
-      '/reportes': 'reportes',
-      '/computo': 'computo',
-      '/matriculas': 'matriculas',
-      '/certificados': 'certificados',
-      '/pama': 'certificadosPama',
-      '/constancias': 'constancias',
-      '/configuracion': 'configuracion',
-      '/agenda': 'agenda',
-      '/consecutivos': 'consecutivos',
-      '/evaluacion': 'evaluacionDocente'
-    };
-    if (pathToTab[currentPath]) {
-      setActiveTab(pathToTab[currentPath] as any);
-    } else if (currentPath === '/') {
-      setActiveTab('dashboard');
+  const pathToTab: Record<string, string> = {
+    '/dashboard': 'dashboard',
+    '/agenda-permisos': 'novedades',
+    '/personal': 'empleados',
+    '/reportes': 'reportes',
+    '/computo': 'computo',
+    '/matriculas': 'matriculas',
+    '/certificados': 'certificados',
+    '/certificados-pama': 'certificadosPama',
+    '/constancias': 'constancias',
+    '/configuracion': 'configuracion',
+    '/agenda': 'agenda',
+    '/consecutivos': 'consecutivos',
+    '/evaluacion': 'evaluacionDocente',
+    '/caja-menor': 'cajaMenor'
+  };
+
+  const tabToPath: Record<string, string> = {
+    'dashboard': '/dashboard',
+    'novedades': '/agenda-permisos',
+    'empleados': '/personal',
+    'reportes': '/reportes',
+    'computo': '/computo',
+    'matriculas': '/matriculas',
+    'certificados': '/certificados',
+    'certificadosPama': '/certificados-pama',
+    'constancias': '/constancias',
+    'configuracion': '/configuracion',
+    'agenda': '/agenda',
+    'consecutivos': '/consecutivos',
+    'evaluacionDocente': '/evaluacion',
+    'cajaMenor': '/caja-menor'
+  };
+
+  const activeTab = (pathToTab[location.pathname] || 'dashboard') as 'dashboard' | 'novedades' | 'empleados' | 'reportes' | 'computo' | 'matriculas' | 'certificados' | 'certificadosPama' | 'constancias' | 'configuracion' | 'agenda' | 'consecutivos' | 'evaluacionDocente' | 'cajaMenor';
+
+  const setActiveTab = (tab: typeof activeTab) => {
+    const targetPath = tabToPath[tab];
+    if (targetPath) {
+      navigate(targetPath);
     }
-  }, [location.pathname]);
+  };
 
   // --- Search and Filters State ---
   const [employeeSearch, setEmployeeSearch] = useState('');
@@ -1722,6 +1740,21 @@ export default function App() {
                 </button>
               )}
 
+              {hasPermission('CAJAMENOR') && (
+                <button
+                  onClick={() => setActiveTab('cajaMenor')}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === 'cajaMenor'
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                  id="tab-btn-caja-menor-sidebar"
+                >
+                  <Wallet className="w-4 h-4 shrink-0" />
+                  Caja Menor
+                </button>
+              )}
+
               <div className="pt-3 pb-1 border-t border-slate-700/50 mt-2">
                 <p className="px-4 text-[9px] font-extrabold text-emerald-400 uppercase tracking-widest leading-none">
                   Gestión Académica
@@ -1886,6 +1919,7 @@ export default function App() {
                 {activeTab === 'certificados' && 'Certificados y Calificaciones Finales de Grado (Supabase)'}
                 {activeTab === 'certificadosPama' && 'Programa de Alimentación y Matrícula Académica PAMA (Supabase)'}
                 {activeTab === 'constancias' && 'Constancias y Certificados de Matrícula Vigentes (Supabase)'}
+                {activeTab === 'cajaMenor' && 'Administración y Reporte de Ingresos y Gastos de Caja Menor'}
                 {activeTab === 'configuracion' && 'Ajustes Generales y Configuración del Sistema'}
               </h2>
               <p className="text-xs text-slate-550 uppercase tracking-wider font-bold lg:block hidden">
@@ -2042,7 +2076,7 @@ export default function App() {
           )}
 
           {/* KPI Cards section - solo para administrador */}
-          {!currentTeacher && !['dashboard', 'matriculas', 'certificados', 'certificadosPama', 'constancias', 'configuracion', 'consecutivos', 'agenda'].includes(activeTab) && (
+          {!currentTeacher && !['dashboard', 'matriculas', 'certificados', 'certificadosPama', 'constancias', 'configuracion', 'consecutivos', 'agenda', 'cajaMenor'].includes(activeTab) && (
             <section className="grid grid-cols-2 lg:grid-cols-4 gap-4" id="kpi-metrics-row">
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
                 <div className="p-3 bg-blue-50 rounded-xl text-blue-650 shrink-0">
@@ -3081,6 +3115,17 @@ export default function App() {
                 onTeacherMessagesChange={setTeacherMessagesStatus}
                 triggerOpenMessages={triggerOpenMessages}
               />
+            </motion.div>
+          )}
+
+          {/* ==================== TAB 10: CAJA MENOR ==================== */}
+          {activeTab === 'cajaMenor' && hasPermission('CAJAMENOR') && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              id="caja-menor-tab-view"
+            >
+              <CajaMenorPanel userSession={userSession} />
             </motion.div>
           )}
 
