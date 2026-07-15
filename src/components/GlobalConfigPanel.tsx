@@ -3,6 +3,7 @@ import { Settings, Image, Award, Check, RotateCcw, AlertTriangle, Database, Clou
 
 export default function GlobalConfigPanel() {
   const [isOpen, setIsOpen] = useState(false);
+  const [appTitle, setAppTitle] = useState('');
   const [appName, setAppName] = useState('');
   const [institutionName, setInstitutionName] = useState('');
   const [institutionDane, setInstitutionDane] = useState('');
@@ -52,7 +53,8 @@ export default function GlobalConfigPanel() {
       setDbError('');
 
         if (data.config) {
-        const remoteApp = data.config.appName || 'App Gestión';
+        const remoteTitle = data.config.appTitle || 'PERMISOS IEA';
+        const remoteApp = data.config.appName || 'APP GESTIÓN ADMINISTRATIVA';
         const remoteInst = data.config.institutionName || 'INSTITUCIÓN EDUCATIVA ALVERNIA';
         const remoteDane = data.config.institutionDane || '186568000567';
         const remoteNit = data.config.institutionNit || '891201897-5';
@@ -71,6 +73,7 @@ export default function GlobalConfigPanel() {
         const remoteSignature = data.config.rectorSignature || '';
         const remoteIhs = data.config.ihsConfig || {};
 
+        setAppTitle(remoteTitle);
         setAppName(remoteApp);
         setInstitutionName(remoteInst);
         setInstitutionDane(remoteDane);
@@ -87,6 +90,7 @@ export default function GlobalConfigPanel() {
         setRectorCargo(remoteCargo);
         setIhsConfig(remoteIhs);
 
+        localStorage.setItem('iea_app_title', remoteTitle);
         localStorage.setItem('iea_app_name', remoteApp);
         localStorage.setItem('alvernia_institution_name', remoteInst);
         localStorage.setItem('alvernia_institution_dane', remoteDane);
@@ -152,6 +156,7 @@ export default function GlobalConfigPanel() {
 
   // Push updates to CockroachDB using our API
   const pushToCockroach = async (updatedFields: {
+    appTitle?: string;
     appName?: string;
     institutionName?: string;
     institutionDane?: string;
@@ -172,7 +177,8 @@ export default function GlobalConfigPanel() {
   }) => {
     try {
       // Prioritize incoming updates, next fallback to state variables, next to localStorage, final to default factory parameters
-      const finalAppName = updatedFields.appName !== undefined ? updatedFields.appName : (appName || localStorage.getItem('iea_app_name') || 'App Gestión');
+      const finalAppTitle = updatedFields.appTitle !== undefined ? updatedFields.appTitle : (appTitle || localStorage.getItem('iea_app_title') || 'PERMISOS IEA');
+      const finalAppName = updatedFields.appName !== undefined ? updatedFields.appName : (appName || localStorage.getItem('iea_app_name') || 'APP GESTIÓN ADMINISTRATIVA');
       const finalInstName = updatedFields.institutionName !== undefined ? updatedFields.institutionName : (institutionName || localStorage.getItem('alvernia_institution_name') || 'INSTITUCIÓN EDUCATIVA ALVERNIA');
       const finalInstDane = updatedFields.institutionDane !== undefined ? updatedFields.institutionDane : (institutionDane || localStorage.getItem('alvernia_institution_dane') || '186568000567');
       const finalInstNit = updatedFields.institutionNit !== undefined ? updatedFields.institutionNit : (institutionNit || localStorage.getItem('alvernia_institution_nit') || '891201897-5');
@@ -209,6 +215,7 @@ export default function GlobalConfigPanel() {
         : (ihsConfig || JSON.parse(localStorage.getItem('iea_ihs_config') || '{}'));
 
       const updateData = {
+        appTitle: finalAppTitle,
         appName: finalAppName,
         institutionName: finalInstName,
         institutionDane: finalInstDane,
@@ -355,6 +362,7 @@ export default function GlobalConfigPanel() {
     const nameUpper = rectorName.toUpperCase();
     const cargoUpper = rectorCargo.toUpperCase();
 
+    localStorage.setItem('iea_app_title', appTitle);
     localStorage.setItem('iea_app_name', appName);
     localStorage.setItem('alvernia_institution_name', institutionName);
     localStorage.setItem('alvernia_institution_dane', institutionDane);
@@ -379,6 +387,7 @@ export default function GlobalConfigPanel() {
     showSuccessIndicator();
 
     await pushToCockroach({
+      appTitle,
       appName,
       institutionName,
       institutionDane,
@@ -694,8 +703,12 @@ CREATE POLICY "Permitir insertar/modificar general" ON public.institucion_config
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Nombre Corto App (Menú Lateral)</label>
-                    <input type="text" value={appName} onChange={e => setAppName(e.target.value)} placeholder="Ej: App Gestión" className="w-full p-2 border border-slate-200 rounded-xl text-xs uppercase font-semibold text-slate-800 focus:outline-none focus:border-emerald-500" required />
+                    <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Título Principal</label>
+                    <input type="text" value={appTitle} onChange={e => setAppTitle(e.target.value)} placeholder="Ej: PERMISOS IEA" className="w-full p-2 border border-slate-200 rounded-xl text-xs uppercase font-semibold text-slate-800 focus:outline-none focus:border-emerald-500" required />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Subtítulo (Menú Lateral)</label>
+                    <input type="text" value={appName} onChange={e => setAppName(e.target.value)} placeholder="Ej: APP GESTIÓN ADMINISTRATIVA" className="w-full p-2 border border-slate-200 rounded-xl text-xs uppercase font-semibold text-slate-800 focus:outline-none focus:border-emerald-500" required />
                   </div>
                 </div>
               </div>

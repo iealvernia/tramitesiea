@@ -143,6 +143,7 @@ async function ensureDbTables() {
       );
 
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS app_name TEXT;
+      ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS app_title TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS institution_nit TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS educational_level TEXT;
       ALTER TABLE alvernia_config ADD COLUMN IF NOT EXISTS calendario TEXT;
@@ -1370,6 +1371,7 @@ app.get("/api/alvernia/config", async (req, res) => {
           institutionNit: row.institution_nit,
           educationalLevel: row.educational_level,
           calendario: row.calendario,
+          appTitle: row.app_title,
           appName: row.app_name,
           rectorName: row.rector_name,
           rectorDocument: row.rector_document,
@@ -1407,6 +1409,7 @@ app.post("/api/alvernia/config", async (req, res) => {
   }
 
   const {
+    appTitle,
     appName,
     institutionName,
     institutionDane,
@@ -1462,12 +1465,13 @@ app.post("/api/alvernia/config", async (req, res) => {
 
     await pool.query(`
       INSERT INTO alvernia_config (
-        id, app_name, institution_name, institution_dane, institution_nit, educational_level, calendario,
+        id, app_title, app_name, institution_name, institution_dane, institution_nit, educational_level, calendario,
         footer_motto, footer_address, footer_emails, footer_website, footer_city,
         rector_name, rector_document, rector_document_expedition, rector_cargo, rector_signature, 
         logo_base64, ihs_config, habilitation_dates, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, CURRENT_TIMESTAMP)
       ON CONFLICT (id) DO UPDATE SET
+        app_title = EXCLUDED.app_title,
         app_name = EXCLUDED.app_name,
         institution_name = EXCLUDED.institution_name,
         institution_dane = EXCLUDED.institution_dane,
@@ -1490,6 +1494,7 @@ app.post("/api/alvernia/config", async (req, res) => {
         updated_at = CURRENT_TIMESTAMP
     `, [
       'default_config',
+      appTitle || null,
       appName || null,
       institutionName || null,
       institutionDane || null,

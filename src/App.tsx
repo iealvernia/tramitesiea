@@ -139,6 +139,18 @@ export default function App() {
   const [isTeacherLogin, setIsTeacherLogin] = useState(false);
   const [teacherCedulaLogin, setTeacherCedulaLogin] = useState('');
 
+  const [appTitle, setAppTitle] = useState(() => localStorage.getItem('iea_app_title') || 'PERMISOS IEA');
+  const [appBrandName, setAppBrandName] = useState(() => localStorage.getItem('iea_app_name') || 'APP GESTIÓN ADMINISTRATIVA');
+
+  useEffect(() => {
+    const handleConfigUpdate = () => {
+      setAppTitle(localStorage.getItem('iea_app_title') || 'PERMISOS IEA');
+      setAppBrandName(localStorage.getItem('iea_app_name') || 'APP GESTIÓN ADMINISTRATIVA');
+    };
+    window.addEventListener('iea_config_updated', handleConfigUpdate);
+    return () => window.removeEventListener('iea_config_updated', handleConfigUpdate);
+  }, []);
+
   // --- Static Asset Preloader for reliable school logo and signature ---
   useEffect(() => {
     const preloadStaticAssets = async () => {
@@ -1395,8 +1407,8 @@ export default function App() {
             <span id="sidebar-brand-text-fallback" className="hidden text-white font-black text-xs uppercase" style={{ display: 'none' }}>IEA</span>
           </div>
           <div>
-            <h1 className="text-white font-extrabold text-sm leading-none uppercase tracking-wider">Permisos IEA</h1>
-            <p className="text-slate-400 text-[10px] uppercase font-bold mt-1 tracking-wider">App Gestión</p>
+            <h1 className="text-white font-extrabold text-sm leading-none uppercase tracking-wider">{appTitle}</h1>
+            <p className="text-slate-400 text-[10px] uppercase font-bold mt-1 tracking-wider">{appBrandName}</p>
           </div>
         </div>
 
