@@ -3,7 +3,7 @@ import { FileText, Plus, Search, Filter, Settings, Trash2, X, Pencil, Check, Fil
 import { ConsecutivoOficio, TipoOficio, Responsable } from '../types';
 import { generarOficioWord } from '../utils/wordGenerator';
 
-export default function ConsecutivosPanel() {
+export default function ConsecutivosPanel({ hasPermission }: { hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean }) {
   const [consecutivos, setConsecutivos] = useState<ConsecutivoOficio[]>([]);
   const [tiposOficio, setTiposOficio] = useState<TipoOficio[]>([]);
   const [responsables, setResponsables] = useState<Responsable[]>([]);

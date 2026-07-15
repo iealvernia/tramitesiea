@@ -39,7 +39,7 @@ interface StudentPama {
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-export default function CertificadosPamaPanel() {
+export default function CertificadosPamaPanel({ hasPermission }: { hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean }) {
   const [students, setStudents] = useState<StudentPama[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorErrorMsg] = useState<string | null>(null);

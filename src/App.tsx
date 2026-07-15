@@ -28,7 +28,9 @@ import {
   User,
   Award,
   FileText,
-  Pencil
+  Pencil,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -134,6 +136,7 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isTeacherLogin, setIsTeacherLogin] = useState(false);
@@ -250,6 +253,57 @@ export default function App() {
     setUserSession(null);
     setActiveTab('novedades');
     showToast('Sesión cerrada correctamente.');
+  };
+
+  const hasPermission = (modulo: string, accion: 'VIEW' | 'MODIFICAR' | 'ELIMINAR' = 'VIEW') => {
+    if (!userSession?.user) return false;
+    if (userSession.user.email === 'matriculas@alvernia.com' || userSession.user.rol === 'ADMIN') return true;
+    
+    const perms = userSession.user.permisos;
+    if (!perms) return false;
+    
+    const hasPerm = (pArray: string[]) => {
+      if (accion === 'VIEW') {
+        return pArray.some(p => p === modulo || p.startsWith(`${modulo}_`));
+      }
+      return pArray.includes(`${modulo}_${accion}`);
+    };
+
+    if (Array.isArray(perms)) {
+      return hasPerm(perms);
+    }
+    
+    if (typeof perms === 'string') {
+      try {
+        const parsed = JSON.parse(perms);
+        if (Array.isArray(parsed)) return hasPerm(parsed);
+      } catch (e) {
+        if (accion === 'VIEW') {
+          return perms.includes(modulo) || perms.includes(`${modulo}_`);
+        }
+        return perms.includes(`${modulo}_${accion}`);
+      }
+    }
+    
+    return false;
+  };
+
+  const logAction = async (accion: string, modulo: string, detalles: string) => {
+    if (!userSession?.user) return;
+    try {
+      await fetch('/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_email: userSession.user.email,
+          accion,
+          modulo,
+          detalles
+        })
+      });
+    } catch (e) {
+      console.error('Failed to log action', e);
+    }
   };
 
   // --- Persistent Storage State ---
@@ -945,6 +999,13 @@ export default function App() {
     setNewEmpCedula('');
     setEditingEmployeeId(null);
     setShowAddEmployeeModal(false);
+    
+    // Log Audit Action
+    logAction(
+      editingEmployeeId ? 'EDITAR_EMPLEADO' : 'CREAR_EMPLEADO',
+      'EMPLEADOS',
+      `Se ${editingEmployeeId ? 'editó' : 'registró'} el empleado ${newEmployee.nombre} (CC: ${newEmployee.cedula})`
+    ).catch(console.error);
   };
 
   const handleDeleteEmployee = async (cedula: string) => {
@@ -964,6 +1025,12 @@ export default function App() {
       }
 
       showToast('Se ha eliminado militarmente el registro del funcionario.');
+      
+      logAction(
+        'ELIMINAR_EMPLEADO',
+        'EMPLEADOS',
+        `Se eliminó el empleado con cédula ${cedula} y su historial de novedades`
+      ).catch(console.error);
     }
   };
 
@@ -1276,14 +1343,23 @@ export default function App() {
 
               <div>
                 <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">Contraseña</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl font-medium text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    placeholder="•••••••••"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl font-medium text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 focus:outline-none"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
 
               <button
@@ -1464,29 +1540,33 @@ export default function App() {
                 </p>
               </div>
 
-              <button
-                onClick={() => setActiveTab("agenda")}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === "agenda"
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}
-              >
-                <Calendar className="w-4 h-4 shrink-0" />
-                Agenda Institucional
-              </button>
+              {hasPermission('AGENDA_INSTITUCIONAL') && (
+                <button
+                  onClick={() => setActiveTab("agenda")}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === "agenda"
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  <Calendar className="w-4 h-4 shrink-0" />
+                  Agenda Institucional
+                </button>
+              )}
 
-              <button
-                onClick={() => setActiveTab("consecutivos")}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === "consecutivos"
-                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/10"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}
-              >
-                <FileText className="w-4 h-4 shrink-0" />
-                Control Consecutivos
-              </button>
+              {hasPermission('CONSECUTIVOS') && (
+                <button
+                  onClick={() => setActiveTab("consecutivos")}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === "consecutivos"
+                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/10"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  <FileText className="w-4 h-4 shrink-0" />
+                  Control Consecutivos
+                </button>
+              )}
               
               <div className="pt-3 pb-1 border-t border-slate-700/50 mt-2">
                 <p className="px-4 text-[9px] font-extrabold text-blue-400 uppercase tracking-widest leading-none">
@@ -1494,57 +1574,65 @@ export default function App() {
                 </p>
               </div>
 
-              <button
-                onClick={() => setActiveTab('novedades')}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === 'novedades'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-                id="tab-btn-novedades-sidebar"
-              >
-                <Calendar className="w-4 h-4 shrink-0" />
-                Agenda de Permisos
-              </button>
+              {hasPermission('NOVEDADES') && (
+                <button
+                  onClick={() => setActiveTab('novedades')}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === 'novedades'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                  id="tab-btn-novedades-sidebar"
+                >
+                  <Calendar className="w-4 h-4 shrink-0" />
+                  Agenda de Permisos
+                </button>
+              )}
 
-              <button
-                onClick={() => setActiveTab('empleados')}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === 'empleados'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-                id="tab-btn-empleados-sidebar"
-              >
-                <Users className="w-4 h-4 shrink-0" />
-                Personal y Carga (Excel)
-              </button>
+              {hasPermission('EMPLEADOS') && (
+                <button
+                  onClick={() => setActiveTab('empleados')}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === 'empleados'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                  id="tab-btn-empleados-sidebar"
+                >
+                  <Users className="w-4 h-4 shrink-0" />
+                  Personal y Carga (Excel)
+                </button>
+              )}
 
-              <button
-                onClick={() => setActiveTab('computo')}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === 'computo'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-                id="tab-btn-computo-sidebar"
-              >
-                <Clock className="w-4 h-4 shrink-0" />
-                Cómputo Absoluto
-              </button>
+              {hasPermission('COMPUTO') && (
+                <button
+                  onClick={() => setActiveTab('computo')}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === 'computo'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                  id="tab-btn-computo-sidebar"
+                >
+                  <Clock className="w-4 h-4 shrink-0" />
+                  Cómputo Absoluto
+                </button>
+              )}
 
-              <button
-                onClick={() => setActiveTab('reportes')}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === 'reportes'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-                id="tab-btn-reportes-sidebar"
-              >
-                <FileSpreadsheet className="w-4 h-4 shrink-0" />
-                Reportes Generales
-              </button>
+              {hasPermission('REPORTES') && (
+                <button
+                  onClick={() => setActiveTab('reportes')}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === 'reportes'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                  id="tab-btn-reportes-sidebar"
+                >
+                  <FileSpreadsheet className="w-4 h-4 shrink-0" />
+                  Reportes Generales
+                </button>
+              )}
 
               <div className="pt-3 pb-1 border-t border-slate-700/50 mt-2">
                 <p className="px-4 text-[9px] font-extrabold text-emerald-400 uppercase tracking-widest leading-none">
@@ -1552,95 +1640,111 @@ export default function App() {
                 </p>
               </div>
               
-              <button
-                onClick={() => setActiveTab("matriculas")}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === "matriculas"
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}
-                id="tab-btn-matriculas-sidebar"
-              >
-                <School className="w-4 h-4 shrink-0" />
-                Control de Matrículas
-              </button>
+              {hasPermission('MATRICULAS') && (
+                <button
+                  onClick={() => setActiveTab("matriculas")}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === "matriculas"
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                  id="tab-btn-matriculas-sidebar"
+                >
+                  <School className="w-4 h-4 shrink-0" />
+                  Control de Matrículas
+                </button>
+              )}
               
-              <button
-                onClick={() => setActiveTab("certificados")}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === "certificados"
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}
-                id="tab-btn-certificados-sidebar"
-              >
-                <FileCheck className="w-4 h-4 shrink-0" />
-                Certificados Generales
-              </button>
+              {hasPermission('CERTIFICADOS') && (
+                <button
+                  onClick={() => setActiveTab("certificados")}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === "certificados"
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                  id="tab-btn-certificados-sidebar"
+                >
+                  <FileCheck className="w-4 h-4 shrink-0" />
+                  Certificados Generales
+                </button>
+              )}
 
-              <button
-                onClick={() => setActiveTab("certificadosPama")}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === "certificadosPama"
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}
-                id="tab-btn-certificadospama-sidebar"
-              >
-                <Award className="w-4 h-4 shrink-0" />
-                Certificados PAMA
-              </button>
+              {hasPermission('CERTIFICADOS_PAMA') && (
+                <button
+                  onClick={() => setActiveTab("certificadosPama")}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === "certificadosPama"
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                  id="tab-btn-certificadospama-sidebar"
+                >
+                  <Award className="w-4 h-4 shrink-0" />
+                  Certificados PAMA
+                </button>
+              )}
 
-              <button
-                onClick={() => setActiveTab("constancias")}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === "constancias"
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}
-                id="tab-btn-constancias-sidebar"
-              >
-                <FilePlus className="w-4 h-4 shrink-0" />
-                Constancias de Estudio
-              </button>
+              {hasPermission('CONSTANCIAS') && (
+                <button
+                  onClick={() => setActiveTab("constancias")}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === "constancias"
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                  id="tab-btn-constancias-sidebar"
+                >
+                  <FilePlus className="w-4 h-4 shrink-0" />
+                  Constancias de Estudio
+                </button>
+              )}
 
-              <div className="pt-3 pb-1 border-t border-slate-700/50 mt-2">
-                <p className="px-4 text-[9px] font-extrabold text-indigo-400 uppercase tracking-widest leading-none">
-                  Evaluación Docente
-                </p>
-              </div>
+              {hasPermission('EVALUACION') && (
+                <>
+                  <div className="pt-3 pb-1 border-t border-slate-700/50 mt-2">
+                    <p className="px-4 text-[9px] font-extrabold text-indigo-400 uppercase tracking-widest leading-none">
+                      Evaluación Docente
+                    </p>
+                  </div>
 
-              <button
-                onClick={() => setActiveTab("evaluacionDocente")}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === "evaluacionDocente"
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}
-                id="tab-btn-evaluacion-sidebar"
-              >
-                <Award className="w-4 h-4 shrink-0" />
-                Evaluación Docente 1278
-              </button>
+                  <button
+                    onClick={() => setActiveTab("evaluacionDocente")}
+                    className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                      activeTab === "evaluacionDocente"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                    id="tab-btn-evaluacion-sidebar"
+                  >
+                    <Award className="w-4 h-4 shrink-0" />
+                    Evaluación Docente 1278
+                  </button>
+                </>
+              )}
 
-              <div className="pt-3 pb-1 border-t border-slate-700/50 mt-2">
-                <p className="px-4 text-[9px] font-extrabold text-slate-500 uppercase tracking-widest leading-none">
-                  Gestión del Sistema
-                </p>
-              </div>
+              {hasPermission('CONFIGURACION') && (
+                <>
+                  <div className="pt-3 pb-1 border-t border-slate-700/50 mt-2">
+                    <p className="px-4 text-[9px] font-extrabold text-slate-500 uppercase tracking-widest leading-none">
+                      Gestión del Sistema
+                    </p>
+                  </div>
 
-              <button
-                onClick={() => setActiveTab("configuracion")}
-                className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
-                  activeTab === "configuracion"
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}
-                id="tab-btn-configuracion-sidebar"
-              >
-                <Settings className="w-4 h-4 shrink-0" />
-                Configuración General
-              </button>
+                  <button
+                    onClick={() => setActiveTab("configuracion")}
+                    className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                      activeTab === "configuracion"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                    id="tab-btn-configuracion-sidebar"
+                  >
+                    <Settings className="w-4 h-4 shrink-0" />
+                    Configuración General
+                  </button>
+                </>
+              )}
             </>
           )}
         </nav>
@@ -1720,94 +1824,116 @@ export default function App() {
 
             {/* Mobile Navigation tab options row */}
             <div className="flex lg:hidden gap-1 flex-wrap" id="mobile-tab-navigation">
-              <button
-                onClick={() => setActiveTab('novedades')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'novedades' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                Agenda
-              </button>
-              <button
-                onClick={() => setActiveTab('empleados')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'empleados' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                Personal
-              </button>
-              <button
-                onClick={() => setActiveTab('computo')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'computo' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                Cómputo
-              </button>
-              <button
-                onClick={() => setActiveTab('reportes')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'reportes' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                Reportes
-              </button>
-              <button
-                onClick={() => setActiveTab('matriculas')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'matriculas' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                Matrículas
-              </button>
-              <button
-                onClick={() => setActiveTab('certificados')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'certificados' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                Certificados
-              </button>
-              <button
-                onClick={() => setActiveTab('certificadosPama')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'certificadosPama' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                PAMA
-              </button>
-              <button
-                onClick={() => setActiveTab('constancias')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'constancias' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                Constancias
-              </button>
-              <button
-                onClick={() => setActiveTab('agenda')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'agenda' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-indigo-700 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                Agenda
-              </button>
-              <button
-                onClick={() => setActiveTab('consecutivos')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'consecutivos' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                Consecutivos
-              </button>
-              <button
-                onClick={() => setActiveTab('configuracion')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                  activeTab === 'configuracion' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-650 hover:bg-slate-200'
-                } cursor-pointer`}
-              >
-                Ajustes
-              </button>
+              {hasPermission('NOVEDADES') && (
+                <button
+                  onClick={() => setActiveTab('novedades')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'novedades' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  Agenda
+                </button>
+              )}
+              {hasPermission('EMPLEADOS') && (
+                <button
+                  onClick={() => setActiveTab('empleados')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'empleados' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  Personal
+                </button>
+              )}
+              {hasPermission('COMPUTO') && (
+                <button
+                  onClick={() => setActiveTab('computo')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'computo' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  Cómputo
+                </button>
+              )}
+              {hasPermission('REPORTES') && (
+                <button
+                  onClick={() => setActiveTab('reportes')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'reportes' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  Reportes
+                </button>
+              )}
+              {hasPermission('MATRICULAS') && (
+                <button
+                  onClick={() => setActiveTab('matriculas')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'matriculas' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  Matrículas
+                </button>
+              )}
+              {hasPermission('CERTIFICADOS') && (
+                <button
+                  onClick={() => setActiveTab('certificados')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'certificados' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  Certificados
+                </button>
+              )}
+              {hasPermission('CERTIFICADOS_PAMA') && (
+                <button
+                  onClick={() => setActiveTab('certificadosPama')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'certificadosPama' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  PAMA
+                </button>
+              )}
+              {hasPermission('CONSTANCIAS') && (
+                <button
+                  onClick={() => setActiveTab('constancias')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'constancias' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  Constancias
+                </button>
+              )}
+              {hasPermission('AGENDA_INSTITUCIONAL') && (
+                <button
+                  onClick={() => setActiveTab('agenda')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'agenda' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-indigo-700 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  Agenda
+                </button>
+              )}
+              {hasPermission('CONSECUTIVOS') && (
+                <button
+                  onClick={() => setActiveTab('consecutivos')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'consecutivos' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  Consecutivos
+                </button>
+              )}
+              {hasPermission('CONFIGURACION') && (
+                <button
+                  onClick={() => setActiveTab('configuracion')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
+                    activeTab === 'configuracion' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-650 hover:bg-slate-200'
+                  } cursor-pointer`}
+                >
+                  Configuración
+                </button>
+              )}
             </div>
           </div>
         </header>
@@ -2767,7 +2893,8 @@ export default function App() {
             >
               <ComputoPanel 
                 employees={employees} 
-                novedades={novedades} 
+                novedades={novedades}
+                hasPermission={hasPermission}
               />
             </motion.div>
           )}
@@ -2781,7 +2908,8 @@ export default function App() {
             >
               <ReportsPanel 
                 employees={employees} 
-                novedades={novedades} 
+                novedades={novedades}
+                hasPermission={hasPermission}
               />
             </motion.div>
           )}
@@ -2793,7 +2921,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               id="matriculas-tab-view"
             >
-              <MatriculasPanel showToast={showToast} />
+              <MatriculasPanel showToast={showToast} hasPermission={hasPermission} />
             </motion.div>
           )}
 
@@ -2804,7 +2932,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               id="certificados-tab-view"
             >
-              <CertificadosPanel />
+              <CertificadosPanel hasPermission={hasPermission} />
             </motion.div>
           )}
 
@@ -2815,7 +2943,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               id="pama-tab-view"
             >
-              <CertificadosPamaPanel />
+              <CertificadosPamaPanel hasPermission={hasPermission} />
             </motion.div>
           )}
 
@@ -2826,7 +2954,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               id="constancias-tab-view"
             >
-              <ConstanciasPanel />
+              <ConstanciasPanel hasPermission={hasPermission} />
             </motion.div>
           )}
 
@@ -2855,7 +2983,7 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <AgendaPanel />
+              <AgendaPanel hasPermission={hasPermission} />
             </motion.div>
           )}
 
@@ -2865,7 +2993,7 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <ConsecutivosPanel />
+              <ConsecutivosPanel hasPermission={hasPermission} />
             </motion.div>
           )}
 
@@ -2877,6 +3005,8 @@ export default function App() {
               id="configuration-tab-view"
             >
               <ConfigurationPanel 
+                userSession={userSession}
+                logAction={logAction}
                 googleUser={googleUser}
                 googleToken={googleToken}
                 spreadsheetId={spreadsheetId}

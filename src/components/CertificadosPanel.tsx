@@ -50,7 +50,7 @@ const MATERIAS_PREDEFINIDAS = [
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-export default function CertificadosPanel() {
+export default function CertificadosPanel({ hasPermission }: { hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean }) {
   const [students, setStudents] = useState<StudentCertificado[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorErrorMsg] = useState<string | null>(null);

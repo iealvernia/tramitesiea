@@ -54,7 +54,7 @@ const GRADOS_OPCIONES: Record<string, string> = {
   "26": "Ciclo VI"
 };
 
-export default function ConstanciasPanel() {
+export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean }) {
   const [students, setStudents] = useState<StudentConstancia[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorErrorMsg] = useState<string | null>(null);

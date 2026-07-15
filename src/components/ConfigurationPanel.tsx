@@ -17,8 +17,12 @@ import {
   Calendar
 } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
+import UserManagementPanel from './UserManagementPanel';
+import AuditLogPanel from './AuditLogPanel';
 
 interface ConfigurationPanelProps {
+  userSession?: any;
+  logAction?: (accion: string, modulo: string, detalles: string) => Promise<void>;
   // Google Sync state and actions
   googleUser: FirebaseUser | null;
   googleToken: string | null;
@@ -41,6 +45,8 @@ interface ConfigurationPanelProps {
 }
 
 export default function ConfigurationPanel({
+  userSession,
+  logAction,
   googleUser,
   googleToken,
   spreadsheetId,
@@ -58,6 +64,10 @@ export default function ConfigurationPanel({
   supabaseDbError,
   fetchFromSupabase
 }: ConfigurationPanelProps) {
+  const isAdmin = userSession?.user?.email === 'matriculas@alvernia.com' || userSession?.user?.rol === 'ADMIN';
+
+  const [appTitle, setAppTitle] = useState('');
+  const [appName, setAppName] = useState('');
   const [rectorName, setRectorName] = useState('');
   const [rectorDoc, setRectorDoc] = useState('');
   const [rectorCargo, setRectorCargo] = useState('');
@@ -83,6 +93,8 @@ export default function ConfigurationPanel({
   // Load initial configurations (Rector & Logo & Params)
   useEffect(() => {
     const loadLocal = () => {
+      const storedAppTitle = localStorage.getItem('iea_app_title') || 'PERMISOS IEA';
+      const storedAppName = localStorage.getItem('iea_app_name') || 'APP GESTIÓN ADMINISTRATIVA';
       const storedName = localStorage.getItem('iea_rector_name') || 'ESP. CARLOS ARCESIO ACOSTA CORONEL';
       const storedDoc = localStorage.getItem('iea_rector_doc') || 'C.C. No. 87.246.722 de La Cruz';
       const storedCargo = localStorage.getItem('iea_rector_cargo') || 'RECTOR';
@@ -125,6 +137,8 @@ export default function ConfigurationPanel({
         localStorage.setItem('iea_ihs_config', JSON.stringify(storedIhs));
       }
 
+      setAppTitle(storedAppTitle);
+      setAppName(storedAppName);
       setRectorName(storedName);
       setRectorDoc(storedDoc);
       setRectorCargo(storedCargo);
@@ -207,16 +221,13 @@ export default function ConfigurationPanel({
     setTimeout(() => setSaveSuccess(false), 2000);
   };
 
-  const handleSaveTextSettings = (e: React.FormEvent) => {
+  const handleSaveTextSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    localStorage.setItem('iea_app_title', appTitle.toUpperCase());
+    localStorage.setItem('iea_app_name', appName.toUpperCase());
     localStorage.setItem('iea_rector_name', rectorName.toUpperCase());
     localStorage.setItem('iea_rector_doc', rectorDoc);
     localStorage.setItem('iea_rector_cargo', rectorCargo.toUpperCase());
-    localStorage.setItem('alvernia_institution_name', instName.toUpperCase());
-    localStorage.setItem('alvernia_institution_dane', instDane);
-    localStorage.setItem('alvernia_institution_nit', instNit);
-    localStorage.setItem('alvernia_educational_level', educationalLevel.toUpperCase());
-    localStorage.setItem('alvernia_calendario', calendario.toUpperCase());
     localStorage.setItem('alvernia_footer_motto', footerMotto);
     localStorage.setItem('alvernia_footer_address', footerAddress);
     localStorage.setItem('alvernia_footer_emails', footerEmails);
@@ -229,6 +240,10 @@ export default function ConfigurationPanel({
     triggerGlobalRefresh();
     showSuccessIndicator();
     showToast('Ajustes institucionales y parámetros de documentos guardados correctamente');
+    
+    if (logAction) {
+      await logAction('ACTUALIZAR_CONFIGURACION', 'CONFIGURACION', 'Se actualizaron los parámetros de la institución o identidad del rector');
+    }
   };
 
   const handleResetDefaults = async () => {
@@ -350,6 +365,28 @@ export default function ConfigurationPanel({
           >
             Sistema y Caché
           </button>
+
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => setActiveSubSection('usuarios')}
+                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl cursor-pointer ${
+                  activeSubSection === 'usuarios' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Gestión de Usuarios
+              </button>
+
+              <button
+                onClick={() => setActiveSubSection('auditoria')}
+                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl cursor-pointer ${
+                  activeSubSection === 'auditoria' ? 'bg-amber-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Bitácora de Auditoría
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -376,7 +413,31 @@ export default function ConfigurationPanel({
               <div className="p-6 space-y-6">
                 <form onSubmit={handleSaveTextSettings} className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
+                    <div className="md:col-span-1">
+                      <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest block mb-1.5">Título Principal (Menú Lateral)</label>
+                      <input
+                        type="text"
+                        value={appTitle}
+                        onChange={e => setAppTitle(e.target.value)}
+                        placeholder="Ej: PERMISOS IEA"
+                        className="w-full p-3 border border-slate-200 bg-slate-50/50 rounded-2xl text-xs uppercase font-extrabold text-slate-800 focus:outline-none focus:border-blue-500 transition-colors"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="md:col-span-1">
+                      <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest block mb-1.5">Subtítulo (App Name)</label>
+                      <input
+                        type="text"
+                        value={appName}
+                        onChange={e => setAppName(e.target.value)}
+                        placeholder="Ej: APP GESTIÓN ADMINISTRATIVA"
+                        className="w-full p-3 border border-slate-200 bg-slate-50/50 rounded-2xl text-xs uppercase font-extrabold text-slate-800 focus:outline-none focus:border-blue-500 transition-colors"
+                        required
+                      />
+                    </div>
+
+                    <div className="md:col-span-2 border-t border-slate-100 pt-4 mt-2">
                       <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest block mb-1.5">Nombre Completo del Firmante (Mayúsculas)</label>
                       <input
                         type="text"
@@ -772,7 +833,7 @@ export default function ConfigurationPanel({
                       className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-black py-2.5 px-5 rounded-xl text-[10.5px] uppercase tracking-wider transition-all shadow-md shadow-blue-600/10 cursor-pointer flex items-center gap-1.5"
                     >
                       <Check className="w-4 h-4" />
-                      Actualizar Identidad Rector
+                      Guardar Configuración y Parámetros
                     </button>
                   </div>
                 </form>
@@ -821,6 +882,14 @@ export default function ConfigurationPanel({
                 </div>
               </div>
             </div>
+          )}
+
+          {isAdmin && (activeSubSection === 'all' || activeSubSection === 'usuarios') && (
+            <UserManagementPanel userSession={userSession} logAction={logAction} showToast={showToast} />
+          )}
+
+          {isAdmin && (activeSubSection === 'all' || activeSubSection === 'auditoria') && (
+            <AuditLogPanel showToast={showToast} />
           )}
 
         </div>

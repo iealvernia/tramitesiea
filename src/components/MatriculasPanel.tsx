@@ -79,7 +79,7 @@ function toCamelCase(obj: any): any {
   return camelCaseObj;
 }
 
-export default function MatriculasPanel({ showToast }: { showToast?: (msg: string) => void }) {
+export default function MatriculasPanel({ showToast, hasPermission }: { showToast?: (msg: string) => void, hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean }) {
   const [students, setStudents] = useState<StudentMatricula[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorErrorMsg] = useState<string | null>(null);

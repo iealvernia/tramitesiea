@@ -10,9 +10,10 @@ import autoTable from 'jspdf-autotable';
 interface ReportsPanelProps {
   employees: Employee[];
   novedades: Novedad[];
+  hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean;
 }
 
-export default function ReportsPanel({ employees, novedades }: ReportsPanelProps) {
+export default function ReportsPanel({ employees, novedades, hasPermission }: ReportsPanelProps) {
   // Filters state
   const currentYearStr = new Date().getFullYear().toString();
   const currentMonthValue = String(new Date().getMonth() + 1).padStart(2, '0'); // Colombian format is standard

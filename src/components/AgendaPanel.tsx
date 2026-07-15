@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Plus, Trash2, Clock, MapPin, Users, User, ChevronLeft, ChevronRight, X, Pencil } from 'lucide-react';
 import { AgendaEvento, Responsable } from '../types';
 
-export default function AgendaPanel() {
+export default function AgendaPanel({ hasPermission }: { hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean }) {
   const [eventos, setEventos] = useState<AgendaEvento[]>([]);
   const [responsables, setResponsables] = useState<Responsable[]>([]);
   const [loading, setLoading] = useState(true);

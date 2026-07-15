@@ -18,9 +18,10 @@ import XLSX from 'xlsx-js-style';
 interface ComputoPanelProps {
   employees: Employee[];
   novedades: Novedad[];
+  hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean;
 }
 
-export default function ComputoPanel({ employees, novedades }: ComputoPanelProps) {
+export default function ComputoPanel({ employees, novedades, hasPermission }: ComputoPanelProps) {
   const currentYearStr = new Date().getFullYear().toString();
   const now = new Date();
   

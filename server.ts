@@ -396,31 +396,45 @@ async function ensureDbTables() {
       );
     `);
 
-    // Create alvernia_admins table
+    // Create alvernia_users table
     await client.query(`
-      CREATE TABLE IF NOT EXISTS alvernia_admins (
+      CREATE TABLE IF NOT EXISTS alvernia_users (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
+        nombre TEXT,
+        rol TEXT DEFAULT 'USER',
+        permisos JSONB,
+        activo BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
     
-    // Seed default admin if table is empty, or update if it was the old one
-    const { rows: admins } = await client.query('SELECT id, email FROM alvernia_admins LIMIT 1');
-    if (admins.length === 0) {
+    // Seed default admin if table is empty
+    const { rows: users } = await client.query('SELECT id, email FROM alvernia_users LIMIT 1');
+    if (users.length === 0) {
       const defaultEmail = 'matriculas@alvernia.com';
       const defaultPassword = 'admin';
       const hash = crypto.createHash('sha256').update(defaultPassword).digest('hex');
+      const allPerms = JSON.stringify(['MATRICULAS', 'CERTIFICADOS', 'EVALUACION', 'CONFIGURACION', 'AGENDA', 'CONSECUTIVOS']);
       await client.query(
-        'INSERT INTO alvernia_admins (id, email, password_hash) VALUES ($1, $2, $3)',
-        [crypto.randomUUID(), defaultEmail, hash]
+        'INSERT INTO alvernia_users (id, email, password_hash, nombre, rol, permisos) VALUES ($1, $2, $3, $4, $5, $6)',
+        [crypto.randomUUID(), defaultEmail, hash, 'Administrador Principal', 'ADMIN', allPerms]
       );
-      console.log('Seeded default admin user');
-    } else if (admins[0].email === 'osjuliansc@gmail.com') {
-      await client.query("UPDATE alvernia_admins SET email = 'matriculas@alvernia.com' WHERE email = 'osjuliansc@gmail.com'");
-      console.log('Updated default admin email to matriculas@alvernia.com');
+      console.log('Seeded default admin user in alvernia_users');
     }
+
+    // Create alvernia_audit_log table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS alvernia_audit_log (
+        id SERIAL PRIMARY KEY,
+        user_email TEXT,
+        accion TEXT,
+        modulo TEXT,
+        detalles TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
     console.log("CockroachDB tables are verified/created successfully.");
   } catch (err: any) {
@@ -475,6 +489,96 @@ function getS3Client(): S3Client | null {
 // --- API ENDPOINTS ---
 
 // Check backend status and DB/R2 configuration
+// --- USER MANAGEMENT ENDPOINTS ---
+
+app.get("/api/users", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(503).json({ error: "Database not connected" });
+  try {
+    const { rows } = await pool.query("SELECT id, email, nombre, rol, permisos, activo, created_at FROM alvernia_users ORDER BY created_at DESC");
+    res.json({ success: true, users: rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/users", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(503).json({ error: "Database not connected" });
+  
+  const { id, email, password, nombre, rol, permisos, activo } = req.body;
+  if (!email) return res.status(400).json({ error: "Email requerido" });
+
+  try {
+    if (id) {
+      if (password && password.trim() !== '') {
+        const hash = crypto.createHash('sha256').update(password).digest('hex');
+        await pool.query(
+          "UPDATE alvernia_users SET email=$1, password_hash=$2, nombre=$3, rol=$4, permisos=$5, activo=$6 WHERE id=$7",
+          [email, hash, nombre, rol, JSON.stringify(permisos), activo, id]
+        );
+      } else {
+        await pool.query(
+          "UPDATE alvernia_users SET email=$1, nombre=$2, rol=$3, permisos=$4, activo=$5 WHERE id=$6",
+          [email, nombre, rol, JSON.stringify(permisos), activo, id]
+        );
+      }
+      res.json({ success: true, id });
+    } else {
+      if (!password) return res.status(400).json({ error: "Contraseña requerida para nuevo usuario" });
+      const newId = crypto.randomUUID();
+      const hash = crypto.createHash('sha256').update(password).digest('hex');
+      await pool.query(
+        "INSERT INTO alvernia_users (id, email, password_hash, nombre, rol, permisos, activo) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [newId, email, hash, nombre, rol || 'USER', JSON.stringify(permisos || []), activo !== false]
+      );
+      res.json({ success: true, id: newId });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/users/:id", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(503).json({ error: "Database not connected" });
+  try {
+    await pool.query("DELETE FROM alvernia_users WHERE id = $1", [req.params.id]);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- AUDIT LOG ENDPOINTS ---
+
+app.post("/api/audit", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(200).json({ success: false, fallback: true }); // Ignore if DB is down
+  
+  const { user_email, accion, modulo, detalles } = req.body;
+  try {
+    await pool.query(
+      "INSERT INTO alvernia_audit_log (user_email, accion, modulo, detalles) VALUES ($1, $2, $3, $4)",
+      [user_email || 'UNKNOWN', accion, modulo, detalles]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/audit", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(503).json({ error: "Database not connected" });
+  try {
+    const { rows } = await pool.query("SELECT * FROM alvernia_audit_log ORDER BY created_at DESC LIMIT 1000");
+    res.json({ success: true, logs: rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/login", async (req, res) => {
   const pool = getDbPool();
   if (!pool) return res.status(500).json({ error: "Database not connected" });
@@ -484,12 +588,34 @@ app.post("/api/login", async (req, res) => {
 
   try {
     const hash = crypto.createHash('sha256').update(password).digest('hex');
-    const { rows } = await pool.query("SELECT * FROM alvernia_admins WHERE email = $1 AND password_hash = $2", [email, hash]);
+    // We check both the new users table and legacy admins table for backward compatibility initially
+    const { rows } = await pool.query("SELECT * FROM alvernia_users WHERE email = $1 AND password_hash = $2 AND activo = true", [email, hash]);
     
     if (rows.length > 0) {
-      return res.json({ success: true, user: { email: rows[0].email } });
+      const user = rows[0];
+      return res.json({ 
+        success: true, 
+        user: { 
+          email: user.email,
+          nombre: user.nombre,
+          rol: user.rol,
+          permisos: user.permisos
+        } 
+      });
     } else {
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      // Legacy fallback
+      const { rows: legacyRows } = await pool.query("SELECT * FROM alvernia_admins WHERE email = $1 AND password_hash = $2", [email, hash]);
+      if (legacyRows.length > 0) {
+         return res.json({ 
+          success: true, 
+          user: { 
+            email: legacyRows[0].email,
+            rol: 'ADMIN', // legacy is admin
+            permisos: ['MATRICULAS', 'CERTIFICADOS', 'EVALUACION', 'CONFIGURACION', 'AGENDA', 'CONSECUTIVOS']
+          } 
+        });
+      }
+      return res.status(401).json({ error: "Credenciales inválidas o usuario inactivo" });
     }
   } catch (err) {
     console.error("Login error:", err);
