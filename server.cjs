@@ -208,6 +208,39 @@ async function ensureDbTables() {
       );
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS alvernia_cajas (
+        id TEXT PRIMARY KEY,
+        nombre TEXT,
+        activa BOOLEAN DEFAULT true,
+        user_id TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    try {
+      await client.query(`ALTER TABLE alvernia_cajas ADD COLUMN IF NOT EXISTS user_id TEXT;`);
+    } catch (e) {
+    }
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS alvernia_caja_transacciones (
+        id TEXT PRIMARY KEY,
+        caja_id TEXT,
+        user_id TEXT,
+        tipo_operacion TEXT,
+        fecha TEXT,
+        categoria TEXT,
+        concepto TEXT,
+        valor NUMERIC,
+        mes TEXT,
+        ano TEXT,
+        comprobante TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    try {
+      await client.query(`ALTER TABLE alvernia_caja_transacciones ADD COLUMN IF NOT EXISTS user_id TEXT;`);
+    } catch (e) {
+    }
+    await client.query(`
       CREATE TABLE IF NOT EXISTS alvernia_matriculas (
         id SERIAL PRIMARY KEY,
         primer_apellido TEXT,
@@ -413,9 +446,33 @@ async function ensureDbTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS alvernia_cajas (
+        id TEXT PRIMARY KEY,
+        nombre TEXT NOT NULL,
+        activa BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS alvernia_caja_transacciones (
+        id TEXT PRIMARY KEY,
+        caja_id TEXT REFERENCES alvernia_cajas(id),
+        tipo_operacion TEXT NOT NULL,
+        fecha TEXT NOT NULL,
+        categoria TEXT NOT NULL,
+        concepto TEXT,
+        valor NUMERIC NOT NULL,
+        mes TEXT,
+        ano TEXT,
+        comprobante TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
     await pool.query(`
       ALTER TABLE alvernia_users ADD COLUMN IF NOT EXISTS sede TEXT DEFAULT 'TODAS';
       ALTER TABLE alvernia_users ADD COLUMN IF NOT EXISTS plain_password TEXT;
+      ALTER TABLE alvernia_caja_transacciones ADD COLUMN IF NOT EXISTS tercero TEXT;
     `);
     console.log("CockroachDB tables are verified/created successfully.");
   } catch (err) {
@@ -1619,7 +1676,15 @@ var genericCRUD = (route, tableName) => {
     const pool = getDbPool();
     if (!pool) return res.status(500).json({ error: "DB not connected" });
     try {
-      const { rows } = await pool.query(`SELECT * FROM ${tableName} ORDER BY created_at DESC`);
+      const { user_id } = req.query;
+      let query = `SELECT * FROM ${tableName}`;
+      let values = [];
+      if (user_id) {
+        query += ` WHERE user_id = $1`;
+        values.push(user_id);
+      }
+      query += ` ORDER BY created_at DESC`;
+      const { rows } = await pool.query(query, values);
       res.json({ data: rows });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1724,6 +1789,8 @@ genericCRUD("agenda", "alvernia_agenda_eventos");
 genericCRUD("consecutivos", "alvernia_consecutivos_oficios");
 genericCRUD("tipos-oficio", "alvernia_tipos_oficio");
 genericCRUD("responsables", "alvernia_responsables");
+genericCRUD("cajas", "alvernia_cajas");
+genericCRUD("caja-transacciones", "alvernia_caja_transacciones");
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
