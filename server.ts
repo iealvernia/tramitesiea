@@ -1001,6 +1001,39 @@ app.post("/api/novedades/bulk", async (req, res) => {
   }
 });
 
+// Update a novedad
+app.put("/api/novedades/:id", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.json({ success: false, fallback: true });
+  
+  const id = req.params.id;
+  const { empleadoId, claseNovedad, sedeNovedad, fechaInicio, fechaFin, estaLaborandoNormalmente, seLeAsignoCargaAcademica, documentoSoporteTipo, documentoSoporteNo, documentoSoporteFecha, observaciones } = req.body;
+  
+  try {
+    await pool.query(
+      `UPDATE alvernia_novedades SET 
+        empleado_id = $1, 
+        clase_novedad = $2, 
+        sede_novedad = $3, 
+        fecha_inicio = $4, 
+        fecha_fin = $5, 
+        esta_laborando_normalmente = $6, 
+        se_le_asigno_carga_academica = $7, 
+        documento_soporte_tipo = $8, 
+        documento_soporte_no = $9, 
+        documento_soporte_fecha = $10, 
+        observaciones = $11, 
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = $12`,
+      [empleadoId, claseNovedad, sedeNovedad, fechaInicio, fechaFin, estaLaborandoNormalmente, seLeAsignoCargaAcademica, documentoSoporteTipo, documentoSoporteNo, documentoSoporteFecha, observaciones, id]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error updating novedad:", err);
+    res.json({ success: false, fallback: true, error: err.message || err });
+  }
+});
+
 // Delete a novedad from CockroachDB
 app.delete("/api/novedades/:id", async (req, res) => {
   const pool = getDbPool();

@@ -25,16 +25,9 @@ export default function ComputoPanel({ employees, novedades, hasPermission }: Co
   const currentYearStr = new Date().getFullYear().toString();
   const now = new Date();
   
-  // Calculate default previous month
-  // E.g. June (month 5 in 0-indexed JS Date) produces May (month 4)
-  let prevMonthVal = now.getMonth(); // 0-indexed, if June, this is 5 (which is 1-indexed 5: Mayo)
-  let prevYearVal = now.getFullYear();
-  if (prevMonthVal === 0) {
-    prevMonthVal = 12; // Diciembre of previous year
-    prevYearVal = prevYearVal - 1;
-  }
-  const defaultAnalisisMonth = String(prevMonthVal).padStart(2, '0');
-  const defaultAnalisisYear = String(prevYearVal);
+  // Calculate default current month
+  const defaultAnalisisMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const defaultAnalisisYear = String(now.getFullYear());
 
   const [analisisMonth, setAnalisisMonth] = useState<string>(defaultAnalisisMonth);
   const [analisisYear, setAnalisisYear] = useState<string>(defaultAnalisisYear);
@@ -115,22 +108,18 @@ export default function ComputoPanel({ employees, novedades, hasPermission }: Co
                       start.getDate() === end.getDate();
 
     if (isSameDay) {
-      if (diffHours >= 24) {
+      // Si el permiso en el mismo día es de 6 o más horas, se cuenta como un día completo (1.0 día)
+      if (diffHours >= 6) {
         return { days: 1, hours: diffHours, label: '1 día' };
       }
-      if (diffHours === 4) {
-        return { days: 0.5, hours: 4, label: '0.5 día (4 horas)' };
-      }
-      if (diffHours === 8) {
-        return { days: 1, hours: 8, label: '1 día (8 horas)' };
-      }
-      // General proportional day count rounded to 1 decimal
-      const roundedDays = Math.round((diffHours / 24) * 10) / 10;
+      
+      // Si es menor a 6 horas, se cuenta estrictamente por horas, usando jornada base de 8 horas
+      const roundedDays = Math.round((diffHours / 8) * 10) / 10;
       const hourLabel = diffHours === 1 ? '1 hora' : `${Math.round(diffHours * 10) / 10} horas`;
       return { 
-        days: roundedDays > 0 ? roundedDays : 0.1, 
+        days: roundedDays, 
         hours: diffHours, 
-        label: roundedDays >= 1 ? `${roundedDays} día(s)` : `${hourLabel}` 
+        label: `${hourLabel}` 
       };
     } else {
       // Days difference + 1 to include start day
@@ -386,7 +375,7 @@ export default function ComputoPanel({ employees, novedades, hasPermission }: Co
         <div className="space-y-1">
           <h4 className="font-bold text-amber-900 text-sm">Regla de Cómputo y Liquidación para Alvernia</h4>
           <p className="text-xs text-amber-850 leading-relaxed">
-            <strong>Mismo día (Sustitución de fracción de jornada):</strong> Si la novedad ocurre el mismo día, se calcula la fracción proporcional: un permiso de 4 horas se liquida como <strong>0.5 días</strong>; uno de 8 horas como <strong>1.0 día</strong>. En cualquier otra cantidad, se prorratea.
+            <strong>Mismo día (Sustitución de fracción de jornada):</strong> Si la novedad ocurre el mismo día y dura <strong>6 o más horas</strong>, se liquida como <strong>1.0 día</strong>. Si es menor a 6 horas, se contabiliza estrictamente por horas laborables perdidas según la jornada de 8 horas.
           </p>
           <p className="text-xs text-amber-850 leading-relaxed">
             <strong>Días calendario de ausencia:</strong> Si comprende fechas distintas, se calcula el lapso de inasistencia calendario utilizando la fórmula regulada: <code className="bg-amber-100/60 font-bold px-1 py-0.5 rounded text-amber-900 font-mono text-[10px]">[Fecha Fin - Fecha Inicio] + 1</code>.

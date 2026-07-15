@@ -718,6 +718,7 @@ export default function App() {
 
   // --- Novedad Registration Form State ---
   const [selectedEmpIdForNovedad, setSelectedEmpIdForNovedad] = useState('');
+  const [editingNovedadId, setEditingNovedadId] = useState<string | null>(null);
   const [newNovClase, setNewNovClase] = useState<string>(CLASES_NOVEDADES_OPCIONES[15]); // default Permiso de Adopción or similar
   const [newNovSede, setNewNovSede] = useState<string>(SEDES_OPCIONES[0]);
   
@@ -1102,7 +1103,7 @@ export default function App() {
     }
 
     const newNovelty: Novedad = {
-      id: `nov-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: editingNovedadId || `nov-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       empleadoId: selectedEmpIdForNovedad,
       claseNovedad: newNovClase,
       sedeNovedad: newNovSede,
@@ -1116,31 +1117,66 @@ export default function App() {
       observaciones: newNovObservaciones.trim()
     };
 
-    setNovedades(prev => [newNovelty, ...prev]);
-
-    try {
-      const res = await fetch('/api/novedades/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([mapNovedadToDb(newNovelty)])
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Error de base de datos');
-      setDbSyncStatus('synced');
-    } catch (e: any) {
-      console.warn('Could not insert new novelty in DB:', e);
-      setDbSyncStatus('error');
-      setDbError(e.message || 'Error de red al guardar novedad');
+    if (editingNovedadId) {
+      setNovedades(prev => prev.map(n => n.id === editingNovedadId ? newNovelty : n));
+      try {
+        const res = await fetch(`/api/novedades/${editingNovedadId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mapNovedadToDb(newNovelty))
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error de base de datos al actualizar');
+        setDbSyncStatus('synced');
+      } catch (e: any) {
+        console.warn('Could not update novelty in DB:', e);
+        setDbSyncStatus('error');
+        setDbError(e.message || 'Error de red al actualizar novedad');
+      }
+      showToast(`Se ha actualizado exitosamente la novedad para ${selectedEmployee.nombre}`);
+    } else {
+      setNovedades(prev => [newNovelty, ...prev]);
+      try {
+        const res = await fetch('/api/novedades/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([mapNovedadToDb(newNovelty)])
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error de base de datos');
+        setDbSyncStatus('synced');
+      } catch (e: any) {
+        console.warn('Could not insert new novelty in DB:', e);
+        setDbSyncStatus('error');
+        setDbError(e.message || 'Error de red al guardar novedad');
+      }
+      showToast(`Se ha registrado de forma exitosa la novedad: "${newNovelty.claseNovedad}" para ${selectedEmployee.nombre}`);
     }
 
-    showToast(`Se ha registrado de forma exitosa la novedad: "${newNovelty.claseNovedad}" para ${selectedEmployee.nombre}`);
-
     // Reset Form fields
+    setEditingNovedadId(null);
     setSelectedEmpIdForNovedad('');
     setEmployeeSelectSearch('');
     setIsEmployeeSelectOpen(false);
     setNewNovDocNo('');
     setNewNovObservaciones('');
+  };
+
+  const handleEditNovedadClick = (nov: Novedad) => {
+    setEditingNovedadId(nov.id);
+    setSelectedEmpIdForNovedad(nov.empleadoId);
+    setNewNovClase(nov.claseNovedad);
+    setNewNovSede(nov.sedeNovedad || SEDES_OPCIONES[0]);
+    setNewNovFechaInicio(nov.fechaInicio);
+    setNewNovFechaFin(nov.fechaFin);
+    setNewNovLaborando(nov.estaLaborandoNormalmente || 'No');
+    setNewNovCarga(nov.seLeAsignoCargaAcademica || 'Si');
+    setNewNovDocTipo((nov.documentoSoporteTipo as any) || 'P');
+    setNewNovDocNo(nov.documentoSoporteNo || '');
+    setNewNovDocFecha(nov.documentoSoporteFecha || new Date().toISOString().substring(0, 10));
+    setNewNovObservaciones(nov.observaciones || '');
+    setNewNovError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteNovedad = async (id: string) => {
@@ -2001,7 +2037,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               id="dashboard-tab-view"
             >
-              <DashboardPanel userSession={userSession} />
+              <DashboardPanel userSession={userSession} hasPermission={hasPermission} />
             </motion.div>
           )}
 
@@ -2512,14 +2548,24 @@ export default function App() {
                                   )}
                                 </td>
                                 <td className="p-3 text-center">
-                                  <button
-                                    onClick={() => handleDeleteNovedad(nov.id)}
-                                    className="p-1 text-slate-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer"
-                                    title="Eliminar permiso"
-                                    id={`btn-del-nov-${nov.id}`}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
+                                  <div className="flex justify-center gap-1">
+                                    <button
+                                      onClick={() => handleEditNovedadClick(nov)}
+                                      className="p-1 text-slate-400 hover:text-blue-600 rounded-lg transition-colors cursor-pointer"
+                                      title="Editar permiso"
+                                      id={`btn-edit-nov-${nov.id}`}
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteNovedad(nov.id)}
+                                      className="p-1 text-slate-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer"
+                                      title="Eliminar permiso"
+                                      id={`btn-del-nov-${nov.id}`}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             );
