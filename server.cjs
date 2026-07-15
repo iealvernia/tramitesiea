@@ -413,6 +413,10 @@ async function ensureDbTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    await pool.query(`
+      ALTER TABLE alvernia_users ADD COLUMN IF NOT EXISTS sede TEXT DEFAULT 'TODAS';
+      ALTER TABLE alvernia_users ADD COLUMN IF NOT EXISTS plain_password TEXT;
+    `);
     console.log("CockroachDB tables are verified/created successfully.");
   } catch (err) {
     console.error("Error ensuring CockroachDB tables:", err);
@@ -457,7 +461,7 @@ app.get("/api/users", async (req, res) => {
   const pool = getDbPool();
   if (!pool) return res.status(503).json({ error: "Database not connected" });
   try {
-    const { rows } = await pool.query("SELECT id, email, nombre, rol, permisos, activo, created_at FROM alvernia_users ORDER BY created_at DESC");
+    const { rows } = await pool.query("SELECT id, email, nombre, rol, permisos, activo, sede, plain_password, created_at FROM alvernia_users ORDER BY created_at DESC");
     res.json({ success: true, users: rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -466,21 +470,29 @@ app.get("/api/users", async (req, res) => {
 app.post("/api/users", async (req, res) => {
   const pool = getDbPool();
   if (!pool) return res.status(503).json({ error: "Database not connected" });
-  const { id, email, password, nombre, rol, permisos, activo } = req.body;
+  const { id, email, password, nombre, rol, permisos, activo, sede } = req.body;
   if (!email) return res.status(400).json({ error: "Email requerido" });
   try {
+    const plainPw = rol === "ADMIN" ? null : password || null;
     if (id) {
       if (password && password.trim() !== "") {
         const hash = import_crypto.default.createHash("sha256").update(password).digest("hex");
         await pool.query(
-          "UPDATE alvernia_users SET email=$1, password_hash=$2, nombre=$3, rol=$4, permisos=$5, activo=$6 WHERE id=$7",
-          [email, hash, nombre, rol, JSON.stringify(permisos), activo, id]
+          "UPDATE alvernia_users SET email=$1, password_hash=$2, nombre=$3, rol=$4, permisos=$5, activo=$6, sede=$7, plain_password=$8 WHERE id=$9",
+          [email, hash, nombre, rol, JSON.stringify(permisos), activo, sede || "TODAS", plainPw, id]
         );
       } else {
-        await pool.query(
-          "UPDATE alvernia_users SET email=$1, nombre=$2, rol=$3, permisos=$4, activo=$5 WHERE id=$6",
-          [email, nombre, rol, JSON.stringify(permisos), activo, id]
-        );
+        if (rol === "ADMIN") {
+          await pool.query(
+            "UPDATE alvernia_users SET email=$1, nombre=$2, rol=$3, permisos=$4, activo=$5, sede=$6, plain_password=NULL WHERE id=$7",
+            [email, nombre, rol, JSON.stringify(permisos), activo, sede || "TODAS", id]
+          );
+        } else {
+          await pool.query(
+            "UPDATE alvernia_users SET email=$1, nombre=$2, rol=$3, permisos=$4, activo=$5, sede=$6 WHERE id=$7",
+            [email, nombre, rol, JSON.stringify(permisos), activo, sede || "TODAS", id]
+          );
+        }
       }
       res.json({ success: true, id });
     } else {
@@ -488,8 +500,8 @@ app.post("/api/users", async (req, res) => {
       const newId = import_crypto.default.randomUUID();
       const hash = import_crypto.default.createHash("sha256").update(password).digest("hex");
       await pool.query(
-        "INSERT INTO alvernia_users (id, email, password_hash, nombre, rol, permisos, activo) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-        [newId, email, hash, nombre, rol || "USER", JSON.stringify(permisos || []), activo !== false]
+        "INSERT INTO alvernia_users (id, email, password_hash, nombre, rol, permisos, activo, sede, plain_password) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        [newId, email, hash, nombre, rol || "USER", JSON.stringify(permisos || []), activo !== false, sede || "TODAS", plainPw]
       );
       res.json({ success: true, id: newId });
     }
