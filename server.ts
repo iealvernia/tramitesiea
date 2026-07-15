@@ -1976,6 +1976,20 @@ genericCRUD('agenda', 'alvernia_agenda_eventos');
 genericCRUD('consecutivos', 'alvernia_consecutivos_oficios');
 genericCRUD('tipos-oficio', 'alvernia_tipos_oficio');
 genericCRUD('responsables', 'alvernia_responsables');
+// Custom delete for cajas to remove related transactions first and avoid foreign key constraint errors
+app.delete("/api/cajas/:id", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(500).json({ error: "DB not connected" });
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM alvernia_caja_transacciones WHERE caja_id = $1", [id]);
+    const result = await pool.query("DELETE FROM alvernia_cajas WHERE id = $1 RETURNING *", [id]);
+    res.json({ data: result.rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 genericCRUD('cajas', 'alvernia_cajas');
 genericCRUD('caja-transacciones', 'alvernia_caja_transacciones');
 
