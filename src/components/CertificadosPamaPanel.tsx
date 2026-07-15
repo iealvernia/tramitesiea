@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 
 import { 
   Award, 
@@ -152,6 +153,39 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
     } catch (err: any) {
       alert('Error: ' + err.message);
     }
+  };
+
+  const handleExportExcel = () => {
+    if (filteredStudents.length === 0) {
+      alert('No hay datos para exportar.');
+      return;
+    }
+
+    const dataToExport = filteredStudents.map(student => ({
+      'AÑO': student.anio,
+      'TIPO DOC': student.tipo_documento,
+      'DOCUMENTO': student.documento,
+      'NOMBRE': student.nombre,
+      'GRADO': student.grado,
+      'JORNADA': student.jornada,
+      'FECHA GRADO': student.fecha_grado,
+      'ACTA': student.acta,
+      'FOLIO': student.folio,
+      'LIBRO': student.libro,
+      'CÓDIGO ICFES': student.codigo_icfes,
+      'CÓDIGO DANE': student.codigo_dane,
+      'SEDE': student.sede,
+      'INTENSIDAD HORARIA': student.intensidad_horaria,
+      'CARÁCTER': student.caracter,
+      'LUGAR EXPEDICIÓN': student.lugar_expedicion,
+      'BENEFICIARIO EXENCIÓN': student.beneficiario_exencion
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'CertificadosPAMA');
+    
+    XLSX.writeFile(workbook, `Reporte_PAMA_${selectedAnio}.xlsx`);
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -558,6 +592,13 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
           </div>
           
           <div className="flex gap-2">
+            <button
+              onClick={handleExportExcel}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-2 shadow transition-all transform hover:-translate-y-0.5 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Exportar a Excel
+            </button>
             <button
               onClick={handleOpenAdd}
               className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-2 shadow transition-all transform hover:-translate-y-0.5 cursor-pointer"

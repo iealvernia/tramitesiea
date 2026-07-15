@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Shield, Plus, Edit, Trash2, Key, Check, X, UserX, UserCheck } from 'lucide-react';
+import { Users, Shield, Plus, Edit, Trash2, Key, Check, X, UserX, UserCheck, Eye, EyeOff } from 'lucide-react';
 
 const AVAILABLE_PERMISSIONS = [
   { id: 'AGENDA_INSTITUCIONAL', label: 'Agenda Institucional' },
@@ -23,8 +23,9 @@ export default function UserManagementPanel({ logAction, userSession, showToast 
   
   // Form state
   const [formData, setFormData] = useState({
-    id: '', email: '', password: '', nombre: '', rol: 'USER', permisos: [] as string[], activo: true
+    id: '', email: '', password: '', nombre: '', rol: 'USER', permisos: [] as string[], activo: true, sede: 'TODAS'
   });
+  const [showPassword, setShowPassword] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -48,16 +49,20 @@ export default function UserManagementPanel({ logAction, userSession, showToast 
   const handleEdit = (user: any) => {
     setEditingUser(user);
     setFormData({
-      id: user.id, email: user.email, password: '', nombre: user.nombre || '', 
-      rol: user.rol || 'USER', permisos: user.permisos || [], activo: user.activo
+      id: user.id,
+      email: user.email,
+      password: user.plain_password || '',
+      nombre: user.nombre || '',
+      rol: user.rol || 'USER',
+      permisos: typeof user.permisos === 'string' ? JSON.parse(user.permisos) : (user.permisos || []),
+      activo: user.activo,
+      sede: user.sede || 'TODAS'
     });
   };
 
   const handleNew = () => {
     setEditingUser({ isNew: true });
-    setFormData({
-      id: '', email: '', password: '', nombre: '', rol: 'USER', permisos: [], activo: true
-    });
+    setFormData({ id: '', email: '', password: '', nombre: '', rol: 'USER', permisos: [], activo: true, sede: 'TODAS' });
   };
 
   const handleCancel = () => {
@@ -169,14 +174,38 @@ export default function UserManagementPanel({ logAction, userSession, showToast 
                 <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full p-2.5 text-xs bg-white border border-slate-200 rounded-xl" required />
               </div>
               <div>
-                <label className="text-[10px] font-extrabold text-slate-500 uppercase block mb-1.5">Contraseña {formData.id && '(Dejar en blanco para no cambiar)'}</label>
-                <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-2.5 text-xs bg-white border border-slate-200 rounded-xl" required={!formData.id} />
+                <label className="text-[10px] font-extrabold text-slate-500 uppercase block mb-1.5">
+                  Contraseña {formData.id && formData.rol === 'ADMIN' ? '(Dejar en blanco para no cambiar)' : ''}
+                </label>
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-2.5 pr-10 text-xs bg-white border border-slate-200 rounded-xl" required={!formData.id || (formData.id && formData.rol !== 'ADMIN' && !formData.password)} />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="text-[10px] font-extrabold text-slate-500 uppercase block mb-1.5">Rol del Sistema</label>
                 <select value={formData.rol} onChange={e => setFormData({...formData, rol: e.target.value, permisos: e.target.value === 'ADMIN' ? [] : formData.permisos})} className="w-full p-2.5 text-xs bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
                   <option value="USER">Usuario (Acceso Restringido)</option>
                   <option value="ADMIN">Administrador (Acceso Total)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-500 uppercase block mb-1.5">Sede Asignada</label>
+                <select value={formData.sede} onChange={e => setFormData({...formData, sede: e.target.value})} className="w-full p-2.5 text-xs bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
+                  <option value="TODAS">Todas las Sedes</option>
+                  <option value="SAN NICOLAS">San Nicolás</option>
+                  <option value="COL ALVERNIA">Col Alvernia</option>
+                  <option value="SAN MARTIN">San Martín</option>
+                  <option value="EL JARDIN">El Jardín</option>
+                  <option value="LA GABRIELA">La Gabriela</option>
+                  <option value="ANTONIO NARIÑO">Antonio Nariño</option>
+                  <option value="VILLA PAZ">Villa Paz</option>
                 </select>
               </div>
             </div>
@@ -234,7 +263,7 @@ export default function UserManagementPanel({ logAction, userSession, showToast 
               <thead>
                 <tr className="border-b border-slate-200 text-[10px] uppercase font-black text-slate-400 bg-slate-50/50">
                   <th className="p-3">Nombre / Email</th>
-                  <th className="p-3">Rol</th>
+                  <th className="p-3">Rol / Sede</th>
                   <th className="p-3">Permisos</th>
                   <th className="p-3 text-center">Estado</th>
                   <th className="p-3 text-right">Acciones</th>
@@ -248,9 +277,11 @@ export default function UserManagementPanel({ logAction, userSession, showToast 
                       <div className="text-[10px] text-slate-500">{u.email}</div>
                     </td>
                     <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${u.rol === 'ADMIN' ? 'bg-rose-100 text-rose-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                        {u.rol}
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${u.rol === 'ADMIN' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {u.rol === 'ADMIN' ? <Shield className="w-3 h-3" /> : <UserCheck className="w-3 h-3" />}
+                        {u.rol === 'ADMIN' ? 'Admin' : 'Usuario'}
                       </span>
+                      <div className="text-[10px] text-slate-500 font-bold mt-1 uppercase">Sede: {u.sede || 'TODAS'}</div>
                     </td>
                     <td className="p-3">
                       {u.rol === 'ADMIN' ? (

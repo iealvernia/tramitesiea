@@ -79,7 +79,7 @@ function toCamelCase(obj: any): any {
   return camelCaseObj;
 }
 
-export default function MatriculasPanel({ showToast, hasPermission }: { showToast?: (msg: string) => void, hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean }) {
+export default function MatriculasPanel({ showToast, hasPermission, userSession }: { showToast?: (msg: string) => void, hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean, userSession?: any }) {
   const [students, setStudents] = useState<StudentMatricula[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorErrorMsg] = useState<string | null>(null);
@@ -633,13 +633,19 @@ const handlePrint = async (s: StudentMatricula) => {
       const nameMatch = `${s.primerNombre} ${s.segundoNombre} ${s.primerApellido} ${s.segundoApellido}`.toLowerCase().includes(searchQuery.toLowerCase()) || 
         s.numeroDocumento?.includes(searchQuery);
       
-      const sedeMatch = filterSede === 'TODAS' || s.sede === filterSede;
+      let sedeMatch = filterSede === 'TODAS' || s.sede === filterSede;
+      
+      // Forzar filtro de sede si el usuario no es ADMIN y tiene una sede asignada
+      if (userSession?.user && userSession.user.rol !== 'ADMIN' && userSession.user.sede && userSession.user.sede !== 'TODAS') {
+        sedeMatch = s.sede === userSession.user.sede;
+      }
+
       const gradoMatch = filterGrado === 'TODOS' || s.grado === filterGrado;
       const sexoMatch = filterSexo === 'TODOS' || s.sexo === filterSexo;
 
       return nameMatch && sedeMatch && gradoMatch && sexoMatch;
     });
-  }, [students, searchQuery, filterSede, filterGrado, filterSexo]);
+  }, [students, searchQuery, filterSede, filterGrado, filterSexo, userSession]);
 
   return (
     <div className="space-y-6">
@@ -661,28 +667,30 @@ const handlePrint = async (s: StudentMatricula) => {
           </div>
           
           <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setEditId(null);
-                setFormState({
-                  primerApellido: '', segundoApellido: '', primerNombre: '', segundoNombre: '',
-                  tipoDocumento: 'TI', numeroDocumento: '', fechaNacimiento: '', nivelEducativo: 'Primaria',
-                  grado: 'PRIMERO 1°', fechaMatricula: new Date().toISOString().substring(0, 10), jornada: 'MAÑANA',
-                  sede: 'COL ALVERNIA', sexo: 'MASCULINO', municipioResidencia: 'PUERTO ASÍS', direccionResidencia: '',
-                  telefonoCelular: '', epsAfiliacion: '', grupoEtnico: 'NINGUNO', viveCon: 'PADRES',
-                  repitente: 'NO', discapacidad: 'NO', estudioAnterior: 'SÍ', institucionAnterior: 'IEA',
-                  numHermanos: '0', grados: 'NO APLICA', correoEstudiante: '', estrato: '1', tipoSangre: 'O+',
-                  acudienteApellidos: '', acudienteNombres: '', acudienteDocumento: '',
-                  acudienteMunicipio: 'PUERTO ASÍS', acudienteDireccion: '', acudienteTelefono: '',
-                  acudienteParentesco: 'MADRE', acudienteProfesion: 'HOGAR'
-                });
-                setShowModal(true);
-              }}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-2 shadow transition-all transform hover:-translate-y-0.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Matricular Estudiante
-            </button>
+            {(!hasPermission || hasPermission('MATRICULAS', 'MODIFICAR')) && (
+              <button
+                onClick={() => {
+                  setEditId(null);
+                  setFormState({
+                    primerApellido: '', segundoApellido: '', primerNombre: '', segundoNombre: '',
+                    tipoDocumento: 'TI', numeroDocumento: '', fechaNacimiento: '', nivelEducativo: 'Primaria',
+                    grado: 'PRIMERO 1°', fechaMatricula: new Date().toISOString().substring(0, 10), jornada: 'MAÑANA',
+                    sede: 'COL ALVERNIA', sexo: 'MASCULINO', municipioResidencia: 'PUERTO ASÍS', direccionResidencia: '',
+                    telefonoCelular: '', epsAfiliacion: '', grupoEtnico: 'NINGUNO', viveCon: 'PADRES',
+                    repitente: 'NO', discapacidad: 'NO', estudioAnterior: 'SÍ', institucionAnterior: 'IEA',
+                    numHermanos: '0', grados: 'NO APLICA', correoEstudiante: '', estrato: '1', tipoSangre: 'O+',
+                    acudienteApellidos: '', acudienteNombres: '', acudienteDocumento: '',
+                    acudienteMunicipio: 'PUERTO ASÍS', acudienteDireccion: '', acudienteTelefono: '',
+                    acudienteParentesco: 'MADRE', acudienteProfesion: 'HOGAR'
+                  });
+                  setShowModal(true);
+                }}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-2 shadow transition-all transform hover:-translate-y-0.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Matricular Estudiante
+              </button>
+            )}
 
             <button
               onClick={handleExportExcel}
@@ -815,9 +823,14 @@ const handlePrint = async (s: StudentMatricula) => {
                         </div>
                       </td>
                       <td className="p-4 font-mono font-bold text-slate-700">
-                        <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] border border-slate-200">
+                        <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] border border-slate-200 block w-max">
                           {student.tipoDocumento}-{student.numeroDocumento}
                         </span>
+                        {student.fechaMatricula && (
+                          <div className="text-[9px] text-slate-400 font-bold mt-1.5 flex items-center gap-1">
+                            📅 {new Date(student.fechaMatricula).toLocaleDateString()}
+                          </div>
+                        )}
                       </td>
                       <td className="p-4">
                         <p className="font-extrabold text-blue-900">{student.grado}</p>
@@ -837,20 +850,24 @@ const handlePrint = async (s: StudentMatricula) => {
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => handleEdit(student)}
-                            className="bg-slate-50 hover:bg-slate-150 text-slate-700 p-1.5 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-                            title="Editar Datos"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => student.id && handleDelete(student.id)}
-                            className="bg-red-50 hover:bg-red-100 text-red-700 p-1.5 rounded-lg border border-red-200 transition-colors cursor-pointer"
-                            title="Borrar Matrícula"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {(!hasPermission || hasPermission('MATRICULAS', 'MODIFICAR')) && (
+                            <button
+                              onClick={() => handleEdit(student)}
+                              className="bg-slate-50 hover:bg-slate-150 text-slate-700 p-1.5 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                              title="Editar Datos"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {(!hasPermission || hasPermission('MATRICULAS', 'ELIMINAR')) && (
+                            <button
+                              onClick={() => student.id && handleDelete(student.id)}
+                              className="bg-red-50 hover:bg-red-100 text-red-700 p-1.5 rounded-lg border border-red-200 transition-colors cursor-pointer"
+                              title="Borrar Matrícula"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

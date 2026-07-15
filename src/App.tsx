@@ -70,6 +70,7 @@ import GlobalConfigPanel from './components/GlobalConfigPanel';
 import ConfigurationPanel from './components/ConfigurationPanel';
 import AgendaPanel from './components/AgendaPanel';
 import ConsecutivosPanel from './components/ConsecutivosPanel';
+import DashboardPanel from './components/DashboardPanel';
 
 // --- Supabase Mapping Helpers for Employees and Novedades (Permisos) ---
 const mapEmployeeToDb = (emp: Employee) => ({
@@ -132,7 +133,6 @@ const mapDbToNovedad = (db: any): Novedad => ({
 
 export default function App() {
   // --- Supabase Authentication State ---
-  const [userSession, setUserSession] = useState<any>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -141,6 +141,51 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isTeacherLogin, setIsTeacherLogin] = useState(false);
   const [teacherCedulaLogin, setTeacherCedulaLogin] = useState('');
+  const [userSession, setUserSession] = useState<any>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('alvernia_admin_session');
+    if (saved) {
+      try {
+        const parsedSession = JSON.parse(saved);
+        setUserSession(parsedSession);
+        
+        // --- Sync latest permissions silently on page load ---
+        if (parsedSession?.user?.email) {
+          fetch('/api/users')
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && data.users) {
+                const updatedUser = data.users.find((u: any) => u.email === parsedSession.user.email);
+                if (updatedUser) {
+                  let parsedPerms = updatedUser.permisos;
+                  if (typeof parsedPerms === 'string') {
+                    try { parsedPerms = JSON.parse(parsedPerms); } catch(e) {}
+                  }
+                  const newSession = {
+                    ...parsedSession,
+                    user: {
+                      ...parsedSession.user,
+                      nombre: updatedUser.nombre,
+                      rol: updatedUser.rol,
+                      permisos: parsedPerms,
+                      sede: updatedUser.sede
+                    }
+                  };
+                  setUserSession(newSession);
+                  localStorage.setItem('alvernia_admin_session', JSON.stringify(newSession));
+                }
+              }
+            })
+            .catch(err => console.error("Error syncing user session", err));
+        }
+
+      } catch (e) {
+        localStorage.removeItem('alvernia_admin_session');
+      }
+    }
+    setCheckingSession(false);
+  }, []);
 
   const [appTitle, setAppTitle] = useState(() => localStorage.getItem('iea_app_title') || 'PERMISOS IEA');
   const [appBrandName, setAppBrandName] = useState(() => localStorage.getItem('iea_app_name') || 'APP GESTIÓN ADMINISTRATIVA');
@@ -238,22 +283,20 @@ export default function App() {
     }
   };
 
-  const handleLogout = async () => {
-    // Si es docente, solo limpiar currentTeacher
-    if (currentTeacher) {
-      setCurrentTeacher(null);
-      setActiveTab('novedades');
+  const handleLogin = (sessionData: any) => {
+      setUserSession(sessionData);
+      localStorage.setItem('alvernia_admin_session', JSON.stringify(sessionData));
+      setActiveTab('dashboard');
       setIsTeacherLogin(false);
       setLoginError(null);
-      showToast('Sesión de docente cerrada correctamente.');
-      return;
-    }
-    // Si es administrador, limpiar sesión local
-    localStorage.removeItem('alvernia_admin_session');
-    setUserSession(null);
-    setActiveTab('novedades');
-    showToast('Sesión cerrada correctamente.');
-  };
+    };
+
+  const handleLogout = () => {
+      setUserSession(null);
+      localStorage.removeItem('alvernia_admin_session');
+      setActiveTab('dashboard');
+      showToast('Sesión cerrada correctamente.');
+    };
 
   const hasPermission = (modulo: string, accion: 'VIEW' | 'MODIFICAR' | 'ELIMINAR' = 'VIEW') => {
     if (!userSession?.user) return false;
@@ -263,10 +306,15 @@ export default function App() {
     if (!perms) return false;
     
     const hasPerm = (pArray: string[]) => {
-      if (accion === 'VIEW') {
-        return pArray.some(p => p === modulo || p.startsWith(`${modulo}_`));
-      }
-      return pArray.includes(`${modulo}_${accion}`);
+      // Patch for typo 'CONSICUTIVOS' -> 'CONSECUTIVOS'
+      const checkModulo = modulo === 'CONSECUTIVOS' ? ['CONSECUTIVOS', 'CONSICUTIVOS'] : [modulo];
+      
+      return checkModulo.some(mod => {
+        if (accion === 'VIEW') {
+          return pArray.some(p => p === mod || p.startsWith(`${mod}_`));
+        }
+        return pArray.includes(`${mod}_${accion}`);
+      });
     };
 
     if (Array.isArray(perms)) {
@@ -615,46 +663,35 @@ export default function App() {
   }, []);
 
   // --- Active Subview State ---
-  const [activeTab, setActiveTab] = useState<'novedades' | 'empleados' | 'reportes' | 'computo' | 'matriculas' | 'certificados' | 'certificadosPama' | 'constancias' | 'configuracion' | 'agenda' | 'consecutivos' | 'evaluacionDocente'>('novedades');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'novedades' | 'empleados' | 'reportes' | 'computo' | 'matriculas' | 'certificados' | 'certificadosPama' | 'constancias' | 'configuracion' | 'agenda' | 'consecutivos' | 'evaluacionDocente'>('dashboard');
 
   // --- URL Routing Sync ---
   const location = useLocation();
   const navigate = useNavigate();
 
-  const tabToPath: Record<string, string> = {
-    'novedades': '/agenda-permisos',
-    'empleados': '/personal',
-    'reportes': '/reportes',
-    'computo': '/computo',
-    'matriculas': '/matriculas',
-    'certificados': '/certificados',
-    'certificadosPama': '/certificados-pama',
-    'constancias': '/constancias',
-    'configuracion': '/configuracion',
-    'agenda': '/agenda-institucional',
-    'consecutivos': '/control-consecutivos',
-    'evaluacionDocente': '/evaluacion-docente'
-  };
-
-  const pathToTab = Object.fromEntries(Object.entries(tabToPath).map(([k, v]) => [v, k]));
-
-  // 1. URL -> State (on initial load or back/forward button)
   useEffect(() => {
     const currentPath = location.pathname;
-    if (pathToTab[currentPath] && pathToTab[currentPath] !== activeTab) {
+    const pathToTab: Record<string, string> = {
+      '/dashboard': 'dashboard',
+      '/permisos': 'novedades',
+      '/personal': 'empleados',
+      '/reportes': 'reportes',
+      '/computo': 'computo',
+      '/matriculas': 'matriculas',
+      '/certificados': 'certificados',
+      '/pama': 'certificadosPama',
+      '/constancias': 'constancias',
+      '/configuracion': 'configuracion',
+      '/agenda': 'agenda',
+      '/consecutivos': 'consecutivos',
+      '/evaluacion': 'evaluacionDocente'
+    };
+    if (pathToTab[currentPath]) {
       setActiveTab(pathToTab[currentPath] as any);
     } else if (currentPath === '/') {
-      setActiveTab('novedades');
+      setActiveTab('dashboard');
     }
   }, [location.pathname]);
-
-  // 2. State -> URL (when user clicks a button to change tab)
-  useEffect(() => {
-    const desiredPath = tabToPath[activeTab] || '/';
-    if (location.pathname !== desiredPath) {
-      navigate(desiredPath);
-    }
-  }, [activeTab]);
 
   // --- Search and Filters State ---
   const [employeeSearch, setEmployeeSearch] = useState('');
@@ -1534,6 +1571,21 @@ export default function App() {
           ) : (
             /* ADMINISTRATOR SIDEBAR NAVIGATION */
             <>
+              {/* --- New Section: Panel Principal --- */}
+              <div className="space-y-1 mt-2">
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-3 font-semibold text-[11px] text-left uppercase tracking-wider ${
+                    activeTab === 'dashboard'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  <Activity className="w-4 h-4" />
+                  Panel Principal
+                </button>
+              </div>
+
               <div className="pt-2 pb-2">
                 <p className="px-4 text-[9px] font-extrabold text-slate-500 uppercase tracking-widest leading-none">
                   Herramientas Institucionales
@@ -1789,6 +1841,7 @@ export default function App() {
             </div>
             <div>
               <h2 className="text-base md:text-lg font-bold text-slate-900" id="header-selected-title">
+                {activeTab === 'dashboard' && 'Panel Principal de Control'}
                 {activeTab === 'novedades' && 'Agenda y Registro de Permisos de Empleados'}
                 {activeTab === 'empleados' && 'Planilla General de Talento Humano'}
                 {activeTab === 'computo' && 'Módulo de Cómputo de Días de Permiso por Docente'}
@@ -1941,11 +1994,19 @@ export default function App() {
         {/* Workspace Body container with scroll */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6" id="workspace-dynamic-content">
           
-          
-
+          {/* ==================== TAB: DASHBOARD ==================== */}
+          {activeTab === 'dashboard' && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              id="dashboard-tab-view"
+            >
+              <DashboardPanel userSession={userSession} />
+            </motion.div>
+          )}
 
           {/* KPI Cards section - solo para administrador */}
-          {!currentTeacher && !['matriculas', 'certificados', 'certificadosPama', 'constancias', 'configuracion', 'consecutivos', 'agenda'].includes(activeTab) && (
+          {!currentTeacher && !['dashboard', 'matriculas', 'certificados', 'certificadosPama', 'constancias', 'configuracion', 'consecutivos', 'agenda'].includes(activeTab) && (
             <section className="grid grid-cols-2 lg:grid-cols-4 gap-4" id="kpi-metrics-row">
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
                 <div className="p-3 bg-blue-50 rounded-xl text-blue-650 shrink-0">
@@ -2921,7 +2982,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               id="matriculas-tab-view"
             >
-              <MatriculasPanel showToast={showToast} hasPermission={hasPermission} />
+              <MatriculasPanel showToast={showToast} hasPermission={hasPermission} userSession={userSession} />
             </motion.div>
           )}
 
