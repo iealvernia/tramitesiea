@@ -1781,6 +1781,18 @@ app.post("/api/database/clean", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.delete("/api/constancias/year/:anio", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(500).json({ error: "DB not connected" });
+  try {
+    const { anio } = req.params;
+    await pool.query("DELETE FROM alvernia_constancias WHERE anio = $1", [anio]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error bulk deleting constancias:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 genericCRUD("matriculas", "alvernia_matriculas");
 genericCRUD("certificados", "alvernia_certificados");
 genericCRUD("certificados-pama", "alvernia_certificados_pama");
