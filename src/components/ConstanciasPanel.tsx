@@ -21,6 +21,10 @@ interface StudentConstancia {
   anio: string;
   tipo_documento: string;
   documento: string;
+  apellido1?: string;
+  apellido2?: string;
+  nombre1?: string;
+  nombre2?: string;
   nombre_completo: string;
   fecha_nacimiento?: string;
   sede: string;
@@ -156,13 +160,9 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
   const handleClearAllYear = async () => {
     if (!confirm(`¿Está totalmente seguro de borrar TODAS las constancias del año ${selectedAnio}? Esta acción es irreversible.`)) return;
     try {
-      const res = await fetch('/api/constancias');
+      const res = await fetch(`/api/constancias/year/${selectedAnio}`, { method: 'DELETE' });
       const json = await res.json();
-      const allStudents = json.data || [];
-      const toDelete = allStudents.filter((s: any) => s.anio === selectedAnio);
-      for (const s of toDelete) {
-        await fetch(`/api/constancias/${s.id}`, { method: 'DELETE' });
-      }
+      if (json.error) throw new Error(json.error);
       alert(`Base de constancias del año ${selectedAnio} limpiada.`);
       loadData();
     } catch (err: any) {
@@ -206,7 +206,6 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
         };
 
         const idxDocumento = findColIdx(/doc|id|identificac|cedula|cc|nro/i);
-        const idxNombre = findColIdx(/nom|estud|alumn|apell/i);
         const idxTipoDoc = findColIdx(/tipo.*doc|tp.*doc|td/i);
         const idxGrado = findColIdx(/grado|curso/i);
         const idxJornada = findColIdx(/jornada|jor/i);
@@ -214,7 +213,18 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
         const idxNacimiento = findColIdx(/nacimiento|fecha.*nac/i);
         const idxInicio = findColIdx(/inicio|fecha.*in/i);
 
-        if (idxNombre === -1 && idxDocumento === -1) {
+        const idxAp1 = findColIdx(/apellido\s*1|apellido1/i);
+        const idxAp2 = findColIdx(/apellido\s*2|apellido2/i);
+        const idxNom1 = findColIdx(/nombre\s*1|nombre1/i);
+        const idxNom2 = findColIdx(/nombre\s*2|nombre2/i);
+        
+        const idxNombreSimple = headers.findIndex(h => {
+          const hc = h.toLowerCase();
+          return (hc.includes('nom') || hc.includes('estud') || hc.includes('alumn') || hc.includes('apell')) &&
+                 !hc.includes('1') && !hc.includes('2');
+        });
+
+        if (idxNombreSimple === -1 && idxDocumento === -1 && idxAp1 === -1 && idxNom1 === -1) {
           throw new Error('No se encontraron las columnas necesarias para "Nombre" o "Documento". Verifique los encabezados.');
         }
 
@@ -223,12 +233,23 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
           if (!Array.isArray(row) || row.length === 0) return;
 
           const docRaw = idxDocumento !== -1 ? String(row[idxDocumento] || '').trim() : '';
-          const nameRaw = idxNombre !== -1 ? String(row[idxNombre] || '').trim() : '';
+          
+          let ap1 = idxAp1 !== -1 && row[idxAp1] ? String(row[idxAp1]).trim().toUpperCase() : '';
+          let ap2 = idxAp2 !== -1 && row[idxAp2] ? String(row[idxAp2]).trim().toUpperCase() : '';
+          let nom1 = idxNom1 !== -1 && row[idxNom1] ? String(row[idxNom1]).trim().toUpperCase() : '';
+          let nom2 = idxNom2 !== -1 && row[idxNom2] ? String(row[idxNom2]).trim().toUpperCase() : '';
+
+          let nameRaw = '';
+          if (ap1 || ap2 || nom1 || nom2) {
+             nameRaw = `${ap1} ${ap2} ${nom1} ${nom2}`.replace(/\s+/g, ' ').trim();
+          } else if (idxNombreSimple !== -1) {
+             nameRaw = String(row[idxNombreSimple] || '').trim();
+          }
 
           if (!docRaw && !nameRaw) return;
 
           const documento = docRaw.replace(/[^A-Za-z0-9_-]/g, "");
-          const nombre_completo = nameRaw.toUpperCase().trim();
+          const nombre_completo = nameRaw.toUpperCase();
           
           let tipo_documento = idxTipoDoc !== -1 && row[idxTipoDoc] ? String(row[idxTipoDoc]).trim().toUpperCase() : 'TI';
           let grado = idxGrado !== -1 && row[idxGrado] ? String(row[idxGrado]).trim().toUpperCase() : '1';
@@ -268,6 +289,10 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
             anio: selectedAnio,
             tipo_documento,
             documento,
+            apellido1: ap1 || undefined,
+            apellido2: ap2 || undefined,
+            nombre1: nom1 || undefined,
+            nombre2: nom2 || undefined,
             nombre_completo,
             fecha_nacimiento,
             sede,
@@ -1072,18 +1097,22 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
               {importingState.status === 'idle' && (
                 <div>
                   <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-                    <h4 className="text-sm font-bold text-emerald-900 mb-2">Columnas esperadas en el archivo Excel:</h4>
-                    <ul className="text-xs text-emerald-800 list-disc list-inside space-y-1">
-                      <li><strong>Documento:</strong> ('doc', 'id', 'cedula')</li>
-                      <li><strong>Nombre:</strong> ('nom', 'apell', 'estudiante')</li>
-                      <li><strong>Tipo Documento:</strong> ('tipo doc', 'td') <span className="text-emerald-600/70 italic">- Opcional</span></li>
-                      <li><strong>Grado:</strong> ('grado', 'curso') <span className="text-emerald-600/70 italic">- Opcional</span></li>
-                      <li><strong>Jornada:</strong> ('jornada') <span className="text-emerald-600/70 italic">- Opcional</span></li>
-                      <li><strong>Fecha de Nacimiento:</strong> ('nacimiento') <span className="text-emerald-600/70 italic">- Opcional</span></li>
-                      <li><strong>Sede:</strong> ('sede', 'institucion') <span className="text-emerald-600/70 italic">- Opcional</span></li>
-                      <li><strong>Fecha de Inicio:</strong> ('inicio') <span className="text-emerald-600/70 italic">- Opcional</span></li>
+                    <h4 className="text-sm font-bold text-emerald-900 mb-2">Columnas esperadas en el archivo Excel (Recomendado):</h4>
+                    <ul className="text-xs text-emerald-800 list-decimal list-inside space-y-1 ml-2 grid grid-cols-2 gap-x-4">
+                      <li><strong>TIPODOC</strong></li>
+                      <li><strong>DOC</strong></li>
+                      <li><strong>APELLIDO1</strong></li>
+                      <li><strong>APELLIDO2</strong></li>
+                      <li><strong>NOMBRE1</strong></li>
+                      <li><strong>NOMBRE2</strong></li>
+                      <li><strong>GRADO</strong></li>
+                      <li><strong>CURSO</strong></li>
+                      <li><strong>JORNADA</strong></li>
+                      <li><strong>FECHA_NACI</strong></li>
+                      <li><strong>SEDE</strong></li>
+                      <li><strong>FECHAINI</strong></li>
                     </ul>
-                    <p className="text-[10px] text-emerald-600 mt-2">Los campos opcionales tomarán valores por defecto del sistema si no se encuentran.</p>
+                    <p className="text-[10px] text-emerald-600 mt-2">También se soporta un formato simple con <strong>'Nombre'</strong> (completo) y <strong>'Documento'</strong>. Los campos opcionales tomarán valores por defecto.</p>
                   </div>
 
                   <div className="border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center hover:bg-slate-50 transition-colors bg-white relative">
