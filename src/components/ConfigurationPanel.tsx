@@ -14,7 +14,9 @@ import {
   Database,
   HelpCircle,
   Sparkles,
-  Calendar
+  Calendar,
+  Download,
+  Upload
 } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
 import UserManagementPanel from './UserManagementPanel';
@@ -89,6 +91,10 @@ export default function ConfigurationPanel({
   const [newIhs, setNewIhs] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [activeSubSection, setActiveSubSection] = useState<'all' | 'institucion' | 'google' | 'sistema'>('all');
+
+  // Backup & Restore states
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   // Load initial configurations (Rector & Logo & Params)
   useEffect(() => {
@@ -243,6 +249,74 @@ export default function ConfigurationPanel({
     
     if (logAction) {
       await logAction('ACTUALIZAR_CONFIGURACION', 'CONFIGURACION', 'Se actualizaron los parámetros de la institución o identidad del rector');
+    }
+  };
+
+  const handleBackup = async () => {
+    try {
+      setIsBackingUp(true);
+      showToast('Generando copia de seguridad...');
+      const res = await fetch('/api/backup');
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Error al generar backup');
+      
+      const blob = new Blob([JSON.stringify(data.backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup_alvernia_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showToast('Copia de seguridad descargada exitosamente');
+      if (logAction) {
+        await logAction('GENERAR_BACKUP', 'CONFIGURACION', 'Se descargó una copia de seguridad de la base de datos');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Hubo un error al generar la copia de seguridad: ' + err.message);
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm('ATENCIÓN: Esta acción reemplazará toda la información de la base de datos con los datos del archivo.\\nLos cambios no guardados se perderán.\\n\\n¿Está completamente seguro?')) {
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      setIsRestoring(true);
+      showToast('Restaurando base de datos...');
+      const text = await file.text();
+      const backupData = JSON.parse(text);
+
+      const res = await fetch('/api/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backup: backupData })
+      });
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) throw new Error(data.error || 'Error al restaurar backup');
+
+      showToast('Base de datos restaurada exitosamente. Recargando la aplicación...');
+      if (logAction) {
+        await logAction('RESTAURAR_BACKUP', 'CONFIGURACION', 'Se restauró la base de datos desde un archivo');
+      }
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (err: any) {
+      console.error(err);
+      alert('Hubo un error al restaurar la copia de seguridad: ' + err.message);
+    } finally {
+      setIsRestoring(false);
+      e.target.value = '';
     }
   };
 
@@ -878,6 +952,44 @@ export default function ConfigurationPanel({
                       <Trash2 className="w-4 h-4" />
                       Limpiar Datos por Módulo
                     </button>
+                  </div>
+                </div>
+
+                <div className="border border-blue-100 rounded-2xl bg-blue-50/20 p-5 mt-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5" id="backup-restore-content-box">
+                  <div className="space-y-1.5 max-w-xl">
+                    <span className="p-1 px-2.5 bg-blue-100 text-blue-800 font-extrabold text-[9px] uppercase tracking-wider rounded-xl border border-blue-200 inline-block">
+                      Gestión de Base de Datos
+                    </span>
+                    <h5 className="font-extrabold text-xs text-slate-900 uppercase">Copia de Seguridad y Restauración</h5>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Descargue una copia de seguridad (backup) con todos los registros actuales de la base de datos. Puede utilizar este archivo posteriormente para restaurar el sistema a este punto exacto, sin perder información histórica.
+                    </p>
+                  </div>
+
+                  <div className="shrink-0 w-full md:w-auto flex flex-col gap-3">
+                    <button
+                      type="button"
+                      onClick={handleBackup}
+                      disabled={isBackingUp || isRestoring}
+                      className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-50 text-white font-extrabold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-950/20 cursor-pointer transition-all border border-blue-700/30 uppercase"
+                    >
+                      <Download className="w-4 h-4" />
+                      {isBackingUp ? 'Descargando...' : 'Descargar Backup'}
+                    </button>
+                    
+                    <label 
+                      className={`w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm cursor-pointer transition-all border border-slate-300 uppercase ${isRestoring || isBackingUp ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      <Upload className="w-4 h-4" />
+                      {isRestoring ? 'Restaurando...' : 'Restaurar Backup'}
+                      <input 
+                        type="file" 
+                        accept=".json" 
+                        onChange={handleRestore} 
+                        className="hidden" 
+                        disabled={isBackingUp || isRestoring}
+                      />
+                    </label>
                   </div>
                 </div>
               </div>

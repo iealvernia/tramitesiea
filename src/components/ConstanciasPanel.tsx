@@ -255,8 +255,18 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
           let grado = idxGrado !== -1 && row[idxGrado] ? String(row[idxGrado]).trim().toUpperCase() : '1';
           let jornada = idxJornada !== -1 && row[idxJornada] ? String(row[idxJornada]).trim().toUpperCase() : 'ÚNICA';
           let sede = idxSede !== -1 && row[idxSede] ? String(row[idxSede]).trim().toUpperCase() : 'COL ALVERNIA';
-          let fecha_nacimiento = idxNacimiento !== -1 && row[idxNacimiento] ? String(row[idxNacimiento]).trim() : '';
-          let fecha_inicio = idxInicio !== -1 && row[idxInicio] ? String(row[idxInicio]).trim() : new Date().toISOString().substring(0, 10);
+          const parseExcelDate = (val: any, defaultDate: string = '') => {
+            if (!val) return defaultDate;
+            const str = String(val).trim();
+            if (!isNaN(Number(str)) && Number(str) > 10000) {
+              const excelEpoch = new Date(1899, 11, 30);
+              const dt = new Date(excelEpoch.getTime() + Number(str) * 86400000);
+              return dt.toISOString().substring(0, 10);
+            }
+            return str;
+          };
+          let fecha_nacimiento = parseExcelDate(idxNacimiento !== -1 ? row[idxNacimiento] : null);
+          let fecha_inicio = parseExcelDate(idxInicio !== -1 ? row[idxInicio] : null, new Date().toISOString().substring(0, 10));
 
           let grado_cod = '1';
           let grado_texto = 'PRIMERO';
@@ -450,6 +460,11 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
   const formatFechaSlash = (fecha: string | undefined): string => {
     if (!fecha) return '';
     try {
+      if (!isNaN(Number(fecha)) && Number(fecha) > 10000) {
+        const excelEpoch = new Date(1899, 11, 30);
+        const dt = new Date(excelEpoch.getTime() + Number(fecha) * 86400000);
+        return `${dt.getDate().toString().padStart(2, '0')}/${(dt.getMonth() + 1).toString().padStart(2, '0')}/${dt.getFullYear()}`;
+      }
       const parts = fecha.split('-');
       if (parts.length === 3) {
         return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
@@ -689,7 +704,7 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
 
       if (customSignature) {
         try {
-          doc.addImage(customSignature, 'PNG', pageWidth / 2 - 20, yPos - 38, 40, 22);
+          doc.addImage(customSignature, 'PNG', pageWidth / 2 - 20, yPos - 25, 40, 22);
         } catch (e) {
           console.error("Error rendering custom signature in ConstanciasPanel:", e);
         }

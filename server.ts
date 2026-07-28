@@ -2003,6 +2003,79 @@ app.delete("/api/cajas/:id", async (req, res) => {
   }
 });
 
+// --- BACKUP & RESTORE ---
+app.get("/api/backup", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(500).json({ error: "DB not connected" });
+  try {
+    const { rows: tables } = await pool.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_type = 'BASE TABLE'
+      AND table_name LIKE 'alvernia_%';
+    `);
+    
+    const backupData: Record<string, any[]> = {};
+    for (const row of tables) {
+      const tableName = row.table_name;
+      const { rows: data } = await pool.query(`SELECT * FROM ${tableName}`);
+      backupData[tableName] = data;
+    }
+    
+    res.json({ success: true, backup: backupData });
+  } catch (err: any) {
+    console.error("Error creating backup:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/restore", async (req, res) => {
+  const pool = getDbPool();
+  if (!pool) return res.status(500).json({ error: "DB not connected" });
+  
+  const client = await pool.connect();
+  try {
+    const { backup } = req.body;
+    if (!backup || typeof backup !== 'object') {
+      return res.status(400).json({ error: "Invalid backup data" });
+    }
+
+    await client.query('BEGIN');
+    
+    for (const [tableName, rows] of Object.entries(backup)) {
+      if (!tableName.startsWith('alvernia_') || !Array.isArray(rows)) continue;
+      
+      // Delete existing data to restore exactly the backup state
+      await client.query(`DELETE FROM ${tableName}`);
+      
+      if (rows.length === 0) continue;
+      
+      const columns = Object.keys(rows[0]);
+      // Enclose column names in quotes to avoid syntax errors with reserved keywords or uppercase
+      const columnNames = columns.map(c => `"${c}"`).join(", ");
+      
+      for (const row of rows) {
+        const values = columns.map(col => row[col]);
+        const placeholders = values.map((_, i) => `$${i + 1}`).join(", ");
+        await client.query(
+          `INSERT INTO ${tableName} (${columnNames}) VALUES (${placeholders})`,
+          values
+        );
+      }
+    }
+    
+    await client.query('COMMIT');
+    res.json({ success: true, message: "Restauración completada" });
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    console.error("Error restoring backup:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 genericCRUD('cajas', 'alvernia_cajas');
 genericCRUD('caja-transacciones', 'alvernia_caja_transacciones');
 
