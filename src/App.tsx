@@ -669,6 +669,7 @@ export default function App() {
   const navigate = useNavigate();
 
   const pathToTab: Record<string, string> = {
+    '/': 'dashboard',
     '/dashboard': 'dashboard',
     '/agenda-permisos': 'novedades',
     '/personal': 'empleados',
@@ -686,7 +687,7 @@ export default function App() {
   };
 
   const tabToPath: Record<string, string> = {
-    'dashboard': '/dashboard',
+    'dashboard': '/',
     'novedades': '/agenda-permisos',
     'empleados': '/personal',
     'reportes': '/reportes',
