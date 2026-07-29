@@ -232,12 +232,14 @@ async function ensureDbTables() {
         valor NUMERIC,
         mes TEXT,
         ano TEXT,
+        tercero TEXT,
         comprobante TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
     try {
       await client.query(`ALTER TABLE alvernia_caja_transacciones ADD COLUMN IF NOT EXISTS user_id TEXT;`);
+      await client.query(`ALTER TABLE alvernia_caja_transacciones ADD COLUMN IF NOT EXISTS tercero TEXT;`);
     } catch (e) {
     }
     await client.query(`
@@ -465,6 +467,7 @@ async function ensureDbTables() {
         valor NUMERIC NOT NULL,
         mes TEXT,
         ano TEXT,
+        tercero TEXT,
         comprobante TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
