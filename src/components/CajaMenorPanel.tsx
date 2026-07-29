@@ -69,6 +69,9 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
   const [activeCajaId, setActiveCajaId] = useState<string>('');
   const [isCreatingCaja, setIsCreatingCaja] = useState(false);
   const [nuevaCajaNombre, setNuevaCajaNombre] = useState('');
+  
+  const [isEditingCaja, setIsEditingCaja] = useState(false);
+  const [editCajaNombre, setEditCajaNombre] = useState('');
 
   const [tipoOp, setTipoOp] = useState<'Entrada' | 'Salida'>('Entrada');
   const [customCategorias, setCustomCategorias] = useState<{ingresos: string[], gastos: string[]}>(() => {
@@ -170,6 +173,22 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       setNuevaCajaNombre('');
     } catch (error) {
       alert('Error creando la caja menor');
+    }
+  };
+
+  const handleGuardarEdicionCaja = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCajaNombre.trim()) return;
+    try {
+      await fetch('/api/cajas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: activeCajaId, nombre: editCajaNombre.toUpperCase() })
+      });
+      await fetchCajas();
+      setIsEditingCaja(false);
+    } catch (error) {
+      alert('Error editando la caja menor');
     }
   };
 
@@ -673,16 +692,51 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
               </form>
             ) : (
               <>
-                <select
-                  value={activeCajaId}
-                  onChange={(e) => setActiveCajaId(e.target.value)}
-                  className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 min-w-[150px]"
-                >
-                  {cajas.length === 0 && <option value="" disabled>No hay cajas creadas</option>}
-                  {cajas.map(c => (
-                    <option key={c.id} value={c.id}>{c.nombre}</option>
-                  ))}
-                </select>
+                {isEditingCaja ? (
+                  <form onSubmit={handleGuardarEdicionCaja} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                      value={editCajaNombre}
+                      onChange={(e) => setEditCajaNombre(e.target.value)}
+                      autoFocus
+                    />
+                    <button type="submit" className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500">
+                      <Save className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => setIsEditingCaja(false)} className="p-2 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <select
+                      value={activeCajaId}
+                      onChange={(e) => setActiveCajaId(e.target.value)}
+                      className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 min-w-[150px]"
+                    >
+                      {cajas.length === 0 && <option value="" disabled>No hay cajas creadas</option>}
+                      {cajas.map(c => (
+                        <option key={c.id} value={c.id}>{c.nombre}</option>
+                      ))}
+                    </select>
+                    {cajas.length > 0 && activeCajaId && (
+                      <button
+                        onClick={() => {
+                          const cajaActual = cajas.find(c => c.id === activeCajaId);
+                          if (cajaActual) {
+                            setEditCajaNombre(cajaActual.nombre);
+                            setIsEditingCaja(true);
+                          }
+                        }}
+                        className="px-3 py-2 bg-slate-100 text-slate-600 rounded-xl border border-slate-200 hover:bg-slate-200 hover:text-slate-800 font-semibold text-sm flex items-center justify-center"
+                        title="Editar nombre de la caja"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </>
+                )}
                 {cajas.length > 0 && (
                   <button
                     onClick={() => handleEliminarCaja(activeCajaId)}
