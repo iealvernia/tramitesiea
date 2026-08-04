@@ -1741,19 +1741,17 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
 
   // Admin review actions
   const handleAdminChangeStatus = (evalId: string, newStatus: 'Aprobado' | 'Corregir') => {
-    let updatedEval: any = null;
-    setEvaluaciones(prev => prev.map(item => {
-      if (item.id === evalId) {
-        updatedEval = {
-          ...item,
-          estado: newStatus,
-          observacionesAdmin: adminFeedback,
-          updatedAt: new Date().toISOString()
-        };
-        return updatedEval;
-      }
-      return item;
-    }));
+    const itemToUpdate = evaluaciones.find(item => item.id === evalId);
+    if (!itemToUpdate) return;
+    
+    const updatedEval = {
+      ...itemToUpdate,
+      estado: newStatus,
+      observacionesAdmin: adminFeedback,
+      updatedAt: new Date().toISOString()
+    };
+
+    setEvaluaciones(prev => prev.map(item => item.id === evalId ? updatedEval : item));
 
     if (selectedEvalForInspection) {
       setSelectedEvalForInspection({
@@ -1761,12 +1759,11 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
         estado: newStatus,
         observacionesAdmin: adminFeedback
       });
+      // Cerrar la vista para que el usuario note que la acción se completó
+      setSelectedEvalForInspection(null);
     }
 
-    if (updatedEval) {
-      syncEvaluacionesToPostgres(updatedEval);
-    }
-
+    syncEvaluacionesToPostgres(updatedEval);
     showToast(`Estado de la evaluación actualizado a: ${newStatus}`);
   };
 

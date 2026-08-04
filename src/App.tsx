@@ -295,6 +295,7 @@ export default function App() {
 
   const handleLogout = () => {
       setUserSession(null);
+      setCurrentTeacher(null);
       localStorage.removeItem('alvernia_admin_session');
       setActiveTab('dashboard');
       showToast('Sesión cerrada correctamente.');
