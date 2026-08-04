@@ -126,7 +126,7 @@ export default function App() {
       const empData = await empRes.json();
       
       if (!empData.success) {
-        console.warn('Error fetching employees from CockroachDB:', empData.error);
+        console.warn('Error fetching employees from PostgreSQL:', empData.error);
         setDbSyncStatus('error');
         setDbError(empData.error || empData.message || 'Error de conexiÃ³n');
         return;
@@ -136,7 +136,7 @@ export default function App() {
       const novData = await novRes.json();
       
       if (!novData.success) {
-        console.warn('Error fetching novedades from CockroachDB:', novData.error);
+        console.warn('Error fetching novedades from PostgreSQL:', novData.error);
         setDbSyncStatus('error');
         setDbError(novData.error || novData.message || 'Error de conexiÃ³n');
         return;
@@ -151,7 +151,7 @@ export default function App() {
       setEmployees(fetchedEmployees);
       setNovedades(fetchedNovedades);
     } catch (e: any) {
-      console.warn('Could not sync from CockroachDB. Fallback to localStorage.', e);
+      console.warn('Could not sync from PostgreSQL. Fallback to localStorage.', e);
       setDbSyncStatus('error');
       setDbError(e.message || 'Error de red inesperado');
     }
@@ -183,7 +183,7 @@ export default function App() {
       setDbSyncStatus('synced');
       setDbError('');
     } catch (e: any) {
-      console.error('Failed pushing to CockroachDB', e);
+      console.error('Failed pushing to PostgreSQL', e);
       setDbSyncStatus('error');
       setDbError(e.message || 'Error de escritura');
     }
@@ -555,7 +555,7 @@ export default function App() {
       }
       setdbSyncStatus('synced');
     } catch (e: any) {
-      console.warn('Could not save imported excel records to CockroachDB:', e);
+      console.warn('Could not save imported excel records to PostgreSQL:', e);
       setdbSyncStatus('error');
       setdbError(e.message || 'Error de red al importar');
     }
@@ -590,7 +590,7 @@ export default function App() {
         if (!data.success) throw new Error(data.error || 'Error de red');
         setdbSyncStatus('synced');
       } catch (e: any) {
-        console.warn('Could not update active state of employee in CockroachDB:', e);
+        console.warn('Could not update active state of employee in PostgreSQL:', e);
         setdbSyncStatus('error');
         setdbError(e.message || 'Error de red al alternar activo');
       }
@@ -646,7 +646,7 @@ export default function App() {
         if (!data.success) throw new Error(data.error || 'Error de red');
         setdbSyncStatus('synced');
       } catch (e: any) {
-        console.warn('Could not update employee in CockroachDB:', e);
+        console.warn('Could not update employee in PostgreSQL:', e);
         setdbSyncStatus('error');
         setdbError(e.message || 'Error de red al actualizar docente');
       }
@@ -665,7 +665,7 @@ export default function App() {
         if (!data.success) throw new Error(data.error || 'Error de red');
         setdbSyncStatus('synced');
       } catch (e: any) {
-        console.warn('Could not insert new employee in CockroachDB:', e);
+        console.warn('Could not insert new employee in PostgreSQL:', e);
         setdbSyncStatus('error');
         setdbError(e.message || 'Error de red al guardar docente');
       }
@@ -715,7 +715,7 @@ export default function App() {
       if (!data.success) throw new Error(data.error || 'Error al borrar docente');
       setdbSyncStatus('synced');
     } catch (e: any) {
-      console.warn('Could not delete employee and associated novedades from CockroachDB:', e);
+      console.warn('Could not delete employee and associated novedades from PostgreSQL:', e);
       setdbSyncStatus('error');
       setdbError(e.message || 'Error de red al borrar docente');
     }
@@ -781,7 +781,7 @@ export default function App() {
       if (!data.success) throw new Error(data.error || 'Error al guardar novedad');
       setdbSyncStatus('synced');
     } catch (e: any) {
-      console.warn('Could not insert new novelty in CockroachDB:', e);
+      console.warn('Could not insert new novelty in PostgreSQL:', e);
       setdbSyncStatus('error');
       setdbError(e.message || 'Error de red al guardar novedad');
     }
@@ -814,7 +814,7 @@ export default function App() {
       if (!data.success) throw new Error(data.error || 'Error al borrar novedad');
       setdbSyncStatus('synced');
     } catch (e: any) {
-      console.warn('Could not delete novelty from CockroachDB:', e);
+      console.warn('Could not delete novelty from PostgreSQL:', e);
       setdbSyncStatus('error');
       setdbError(e.message || 'Error de red al borrar novedad');
     }

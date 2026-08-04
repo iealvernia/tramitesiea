@@ -372,12 +372,12 @@ export default function App() {
     return wasCleared ? [] : INITIAL_NOVEDADES;
   });
 
-  // --- CockroachDB Synchronization State ---
+  // --- PostgreSQL Synchronization State ---
   const [dbSyncStatus, setDbSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const [dbError, setDbError] = useState<string>('');
 
   // --- Evaluación Docente State ---
-  // Persistencia local como caché; se sincroniza con CockroachDB al iniciar sesión
+  // Persistencia local como caché; se sincroniza con PostgreSQL al iniciar sesión
   const [docentesEvaluacion, setDocentesEvaluacion] = useState<DocenteEvaluacion[]>(() => {
     const saved = localStorage.getItem('alvernia_docentes_evaluacion');
     return saved ? JSON.parse(saved) : [];
@@ -386,7 +386,7 @@ export default function App() {
   const [teacherMessagesStatus, setTeacherMessagesStatus] = useState<'none' | 'red' | 'green'>('none');
   const [triggerOpenMessages, setTriggerOpenMessages] = useState(0);
 
-  // Cargar docentes de evaluación desde CockroachDB al iniciar sesión
+  // Cargar docentes de evaluación desde PostgreSQL al iniciar sesión
   const fetchDocentesEvaluacion = async () => {
     try {
       const res = await fetch('/api/docentesEvaluacion');
@@ -408,7 +408,7 @@ export default function App() {
       const empData = await empRes.json();
       
       if (!empData.success) {
-        console.warn('Error fetching employees from CockroachDB:', empData.error);
+        console.warn('Error fetching employees from PostgreSQL:', empData.error);
         setDbSyncStatus('error');
         setDbError(empData.error || empData.message || 'Error de conexión');
         return;
@@ -418,7 +418,7 @@ export default function App() {
       const novData = await novRes.json();
       
       if (!novData.success) {
-        console.warn('Error fetching novedades from CockroachDB:', novData.error);
+        console.warn('Error fetching novedades from PostgreSQL:', novData.error);
         setDbSyncStatus('error');
         setDbError(novData.error || novData.message || 'Error de conexión');
         return;
@@ -460,7 +460,7 @@ export default function App() {
         await pushToDb(seedEmployees, seedNovedades);
       }
     } catch (e: any) {
-      console.warn('Network error fetching from CockroachDB:', e);
+      console.warn('Network error fetching from PostgreSQL:', e);
       setDbSyncStatus('error');
       setDbError(e.message || 'Error de red');
     }
@@ -498,7 +498,7 @@ export default function App() {
 
   useEffect(() => {
     if (userSession) {
-      // Background pull from CockroachDB
+      // Background pull from PostgreSQL
       fetchFromDb();
       fetchDocentesEvaluacion();
     }

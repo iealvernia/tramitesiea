@@ -853,7 +853,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       setCurrentTeacher(updated);
     }
 
-    // 3. Save to CockroachDB
+    // 3. Save to PostgreSQL
     try {
       const dbEmp: any = {
         id: updated.id,
@@ -875,7 +875,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
         body: JSON.stringify({ docentesEvaluacion: [dbEmp] })
       });
       const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Failed to save to CockroachDB');
+      if (!data.success) throw new Error(data.error || 'Failed to save to PostgreSQL');
       showToast('✓ Datos del docente actualizados correctamente.');
     } catch (err: any) {
       console.warn('Supabase save failed, saved locally:', err);
@@ -902,15 +902,15 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       setCurrentTeacher(null);
     }
 
-    // 3. Delete from CockroachDB
+    // 3. Delete from PostgreSQL
     try {
       const res = await fetch(`/api/docentesEvaluacion/${deletingTeacher.id}`, { method: 'DELETE' });
       const data = await res.json();
-      if (!data.success && !data.fallback) throw new Error(data.error || 'Failed to delete in CockroachDB');
+      if (!data.success && !data.fallback) throw new Error(data.error || 'Failed to delete in PostgreSQL');
       
       showToast(`✓ Registro de ${deletingTeacher.nombre} eliminado permanentemente.`);
     } catch (err: any) {
-      console.warn('CockroachDB delete failed, deleted locally:', err);
+      console.warn('PostgreSQL delete failed, deleted locally:', err);
       showToast(`✓ Registro de ${deletingTeacher.nombre} eliminado localmente.`);
     } finally {
       setIsDeletingInProgress(false);
@@ -1019,7 +1019,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
     }
   };
 
-  const fetchConfigFromCockroach = async () => {
+  const fetchConfigFromPostgres = async () => {
     try {
       const response = await fetch('/api/alvernia/config');
       const resData = await response.json();
@@ -1053,32 +1053,32 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
           setHabilitationDates(c.habilitationDates);
           localStorage.setItem('alvernia_habilitation_dates', JSON.stringify(c.habilitationDates));
         }
-        console.log('Parámetros de configuración cargados desde CockroachDB');
+        console.log('Parámetros de configuración cargados desde PostgreSQL');
       }
     } catch (err) {
-      console.warn('No se pudo cargar la configuración de CockroachDB:', err);
+      console.warn('No se pudo cargar la configuración de PostgreSQL:', err);
     }
   };
 
 
 
-  // Trigger manual pull/sync from Supabase and CockroachDB
+  // Trigger manual pull/sync from Supabase and PostgreSQL
   const fetchEvaluacionesFromSupabase = async () => {
     let pulled: Evaluacion1278[] = [];
 
-    // Try fetching from CockroachDB first
+    // Try fetching from PostgreSQL first
     try {
       const response = await fetch('/api/evaluaciones');
       const resData = await response.json();
       if (resData.success && resData.evaluaciones && resData.evaluaciones.length > 0) {
         pulled = resData.evaluaciones;
-        console.log('Evaluaciones cargadas desde CockroachDB');
+        console.log('Evaluaciones cargadas desde PostgreSQL');
       }
     } catch (dbErr) {
-      console.warn('No se pudo leer de CockroachDB (cayendo a Supabase/Local):', dbErr);
+      console.warn('No se pudo leer de PostgreSQL (cayendo a Supabase/Local):', dbErr);
     }
 
-    // Fallback/Sync with Supabase if CockroachDB had no data
+    // Fallback/Sync with Supabase if PostgreSQL had no data
     if (pulled.length === 0) {
       try {
         const { data, error } = await supabase.from('evaluaciones_1278').select('data');
@@ -1115,7 +1115,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
 
   useEffect(() => {
     fetchEvaluacionesFromSupabase();
-    fetchConfigFromCockroach();
+    fetchConfigFromPostgres();
   }, []);
 
   // Handle teacher login check
@@ -1277,8 +1277,8 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       return item;
     }));
     
-    // Persist with backend CockroachDB sync
-    syncEvaluacionesToCockroach(updatedEval);
+    // Persist with backend PostgreSQL sync
+    syncEvaluacionesToPostgres(updatedEval);
   };
 
   // Update comportamentales commitments
@@ -1318,8 +1318,8 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       return item;
     }));
     
-    // Persist with backend CockroachDB sync
-    syncEvaluacionesToCockroach(updatedEval);
+    // Persist with backend PostgreSQL sync
+    syncEvaluacionesToPostgres(updatedEval);
   };
 
   // Sync behaviors when dropdown selections change
@@ -1350,8 +1350,8 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       return [itemToSave, ...filtered];
     });
 
-    syncEvaluacionesToCockroach(itemToSave);
-    showToast('Borrador guardado correctamente en la base de datos (CockroachDB).');
+    syncEvaluacionesToPostgres(itemToSave);
+    showToast('Borrador guardado correctamente en la base de datos (PostgreSQL).');
   };
 
   // Submit evaluation for review
@@ -1417,8 +1417,8 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       return [itemToSave, ...filtered];
     });
 
-    syncEvaluacionesToCockroach(itemToSave);
-    showToast('Seguimiento enviado a revisión y guardado en la base de datos (CockroachDB).');
+    syncEvaluacionesToPostgres(itemToSave);
+    showToast('Seguimiento enviado a revisión y guardado en la base de datos (PostgreSQL).');
   };
 
   // Anexo 2: Add row of evidence
@@ -1710,7 +1710,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
         return [updatedEval, ...filtered];
       });
 
-      syncEvaluacionesToCockroach(updatedEval);
+      syncEvaluacionesToPostgres(updatedEval);
       showToast('✓ Portafolio de evidencias PDF consolidado y guardado en la nube.');
     } catch (err) {
       console.error('R2 cloud storage failed:', err);
@@ -1735,7 +1735,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       const filtered = prev.filter(e => e.id !== updatedEval.id);
       return [updatedEval, ...filtered];
     });
-    syncEvaluacionesToCockroach(updatedEval);
+    syncEvaluacionesToPostgres(updatedEval);
     showToast('Portafolio PDF removido con éxito.');
   };
 
@@ -1764,7 +1764,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
     }
 
     if (updatedEval) {
-      syncEvaluacionesToCockroach(updatedEval);
+      syncEvaluacionesToPostgres(updatedEval);
     }
 
     showToast(`Estado de la evaluación actualizado a: ${newStatus}`);
@@ -1786,11 +1786,11 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
     
     showToast('Registro de evaluación eliminado con éxito.');
 
-    // Remove from CockroachDB backend using custom endpoint to delete all duplicates
+    // Remove from PostgreSQL backend using custom endpoint to delete all duplicates
     try {
       await fetch(`/api/evaluaciones/teacher/${recordToDelete.cedula}/${recordToDelete.periodo}`, { method: 'DELETE' });
     } catch (err) {
-      console.warn('Error eliminando del backend CockroachDB:', err);
+      console.warn('Error eliminando del backend PostgreSQL:', err);
     }
     
     // Remove from Supabase backup
@@ -1804,7 +1804,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
   };
 
   // --- COCKROACHDB PERSISTENCE SYNCHRONIZER ---
-  const syncEvaluacionesToCockroach = async (item: Evaluacion1278) => {
+  const syncEvaluacionesToPostgres = async (item: Evaluacion1278) => {
     try {
       const response = await fetch('/api/evaluaciones', {
         method: 'POST',
@@ -1813,13 +1813,13 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       });
       const resData = await response.json();
       if (resData.success) {
-        console.log('Sincronizado exitosamente con CockroachDB');
+        console.log('Sincronizado exitosamente con PostgreSQL');
       } else {
-        console.error('Error guardando en CockroachDB:', resData.error || resData.message);
+        console.error('Error guardando en PostgreSQL:', resData.error || resData.message);
         showToast('⚠️ Hubo un error guardando en la base de datos. ' + (resData.error || ''));
       }
     } catch (err: any) {
-      console.warn('Fallo guardado en CockroachDB:', err);
+      console.warn('Fallo guardado en PostgreSQL:', err);
       showToast('⚠️ Error de conexión con la base de datos.');
     }
   };
@@ -1874,7 +1874,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
         if (newEmployees.length === 0) {
           throw new Error('No se encontraron registros de docentes válidos (con nombre y cédula). El Excel debe contener las columnas: Nombre y Cedula.');
         }
-        // 1. Write to CockroachDB bulk endpoint
+        // 1. Write to PostgreSQL bulk endpoint
         const bulkRes = await fetch('/api/docentesEvaluacion/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1882,7 +1882,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
         });
         const bulkData = await bulkRes.json();
         if (!bulkData.success) {
-          throw new Error('Error guardando en CockroachDB: ' + (bulkData.error || bulkData.message));
+          throw new Error('Error guardando en PostgreSQL: ' + (bulkData.error || bulkData.message));
         }
 
         if (setDocentesEvaluacion) {

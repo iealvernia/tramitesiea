@@ -8,9 +8,9 @@ const SUPABASE_URL = 'https://odvgmujuhgktfgrtzxwv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kdmdtdWp1aGdrdGZncnR6eHd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAxNjYzNTQsImV4cCI6MjA3NTc0MjM1NH0.WgYUziTE30h5s35wAw91VAkgM000gm-w3x0agY9pe5c';
 
 const { Pool } = pg;
-const dbUrl = process.env.COCKROACH_DB_URL;
+const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) {
-  console.error("No COCKROACH_DB_URL found in .env");
+  console.error("No DATABASE_URL found in .env");
   process.exit(1);
 }
 
@@ -36,10 +36,10 @@ const fetchSupabaseTable = (tableName: string): Promise<any[]> => {
 };
 
 const tablesToMigrate = [
-  { supabase: 'matriculas', cockroach: 'alvernia_matriculas' },
-  { supabase: 'certificados', cockroach: 'alvernia_certificados' },
-  { supabase: 'certificados_pama', cockroach: 'alvernia_certificados_pama' },
-  { supabase: 'constancias', cockroach: 'alvernia_constancias' }
+  { supabase: 'matriculas', postgres: 'alvernia_matriculas' },
+  { supabase: 'certificados', postgres: 'alvernia_certificados' },
+  { supabase: 'certificados_pama', postgres: 'alvernia_certificados_pama' },
+  { supabase: 'constancias', postgres: 'alvernia_constancias' }
 ];
 
 async function run() {
@@ -56,12 +56,12 @@ async function run() {
         const placeholders = values.map((_, i) => `$${i + 1}`).join(", ");
         
         try {
-          await client.query(`INSERT INTO ${table.cockroach} (${columns}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`, values);
+          await client.query(`INSERT INTO ${table.postgres} (${columns}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`, values);
         } catch (err: any) {
-           console.error(`Error inserting row ${row.id} into ${table.cockroach}:`, err.message);
+           console.error(`Error inserting row ${row.id} into ${table.postgres}:`, err.message);
         }
       }
-      console.log(`Migrated ${table.supabase} -> ${table.cockroach}`);
+      console.log(`Migrated ${table.supabase} -> ${table.postgres}`);
     }
   } finally {
     client.release();

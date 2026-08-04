@@ -30,8 +30,8 @@ export default function GlobalConfigPanel() {
   const [newSubject, setNewSubject] = useState('');
   const [newIhs, setNewIhs] = useState('');
 
-  // Synchronize configuration from CockroachDB 'alvernia_config' table via our API
-  const fetchFromCockroach = async () => {
+  // Synchronize configuration from PostgreSQL 'alvernia_config' table via our API
+  const fetchFromPostgres = async () => {
     setSyncing(true);
     setSyncStatus('syncing');
     try {
@@ -40,7 +40,7 @@ export default function GlobalConfigPanel() {
 
       if (!data.success) {
         if (data.fallback) {
-          console.warn('CockroachDB error, using fallback:', data.error);
+          console.warn('PostgreSQL error, using fallback:', data.error);
         } else {
           console.error('Error fetching config:', data.message);
         }
@@ -117,7 +117,7 @@ export default function GlobalConfigPanel() {
           const localLogo = localStorage.getItem('iea_custom_logo') || '';
           if (localLogo) {
             setLogoBase64(localLogo);
-            pushToCockroach({ logoBase64: localLogo });
+            pushToPostgres({ logoBase64: localLogo });
           } else {
             setLogoBase64('');
             localStorage.removeItem('iea_custom_logo');
@@ -133,7 +133,7 @@ export default function GlobalConfigPanel() {
           const localSig = localStorage.getItem('iea_custom_signature') || '';
           if (localSig) {
             setSignatureBase64(localSig);
-            pushToCockroach({ rectorSignature: localSig });
+            pushToPostgres({ rectorSignature: localSig });
           } else {
             setSignatureBase64('');
             localStorage.removeItem('iea_custom_signature');
@@ -143,10 +143,10 @@ export default function GlobalConfigPanel() {
         triggerGlobalRefresh();
       } else {
         // Table exists but is completely empty. Warm it up with initial local settings!
-        await pushToCockroach({});
+        await pushToPostgres({});
       }
     } catch (e: any) {
-      console.warn('Could not sync default config from CockroachDB. Using localStorage fallback.', e);
+      console.warn('Could not sync default config from PostgreSQL. Using localStorage fallback.', e);
       setSyncStatus('error');
       setDbError(e.message || 'Error de red inesperado');
     } finally {
@@ -154,8 +154,8 @@ export default function GlobalConfigPanel() {
     }
   };
 
-  // Push updates to CockroachDB using our API
-  const pushToCockroach = async (updatedFields: {
+  // Push updates to PostgreSQL using our API
+  const pushToPostgres = async (updatedFields: {
     appTitle?: string;
     appName?: string;
     institutionName?: string;
@@ -243,7 +243,7 @@ export default function GlobalConfigPanel() {
       const data = await response.json();
 
       if (!data.success) {
-        console.error('Error saving/uploading to CockroachDB table:', data.error);
+        console.error('Error saving/uploading to PostgreSQL table:', data.error);
         setSyncStatus('error');
         setDbError(data.error || 'Error de escritura');
       } else {
@@ -251,7 +251,7 @@ export default function GlobalConfigPanel() {
         setDbError('');
       }
     } catch (e: any) {
-      console.warn('Failed pushing config update to CockroachDB.', e);
+      console.warn('Failed pushing config update to PostgreSQL.', e);
       setSyncStatus('error');
       setDbError(e.message || 'Error de conexión');
     }
@@ -297,8 +297,8 @@ export default function GlobalConfigPanel() {
     setSignatureBase64(storedSignature);
     setIhsConfig(storedIhs);
 
-    // Dynamic sync from CockroachDB
-    fetchFromCockroach();
+    // Dynamic sync from PostgreSQL
+    fetchFromPostgres();
   }, []);
 
   // Handle Logo Upload and Convert to Base64
@@ -318,7 +318,7 @@ export default function GlobalConfigPanel() {
       localStorage.setItem('iea_custom_logo', base64String);
       triggerGlobalRefresh();
       showSuccessIndicator();
-      await pushToCockroach({ logoBase64: base64String });
+      await pushToPostgres({ logoBase64: base64String });
     };
     reader.readAsDataURL(file);
   };
@@ -340,7 +340,7 @@ export default function GlobalConfigPanel() {
       localStorage.setItem('iea_custom_signature', base64String);
       triggerGlobalRefresh();
       showSuccessIndicator();
-      await pushToCockroach({ rectorSignature: base64String });
+      await pushToPostgres({ rectorSignature: base64String });
     };
     reader.readAsDataURL(file);
   };
@@ -386,7 +386,7 @@ export default function GlobalConfigPanel() {
     triggerGlobalRefresh();
     showSuccessIndicator();
 
-    await pushToCockroach({
+    await pushToPostgres({
       appTitle,
       appName,
       institutionName,
@@ -419,7 +419,7 @@ export default function GlobalConfigPanel() {
     const defaultRectorDoc = 'C.C. No. 87.246.722 de La Cruz';
     const defaultRectorCargo = 'RECTOR';
 
-    await pushToCockroach({
+    await pushToPostgres({
       rectorName: defaultRectorName,
       rectorDocument: defaultRectorDoc,
       rectorCargo: defaultRectorCargo
@@ -472,7 +472,7 @@ export default function GlobalConfigPanel() {
     triggerGlobalRefresh();
     showSuccessIndicator();
 
-    await pushToCockroach({
+    await pushToPostgres({
       rectorName: defaultRectorName,
       rectorDocument: defaultRectorDoc,
       rectorCargo: defaultRectorCargo,
@@ -502,7 +502,7 @@ export default function GlobalConfigPanel() {
               {syncStatus === 'synced' && (
                 <span className="inline-flex items-center gap-1.5 text-[8.5px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wide">
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0" />
-                  Conectado a CockroachDB (Sincronizado)
+                  Conectado a PostgreSQL (Sincronizado)
                 </span>
               )}
               {syncStatus === 'error' && (
