@@ -1428,7 +1428,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
     if (isReadOnly) return;
     const newRow: EvidenciaFila = {
       id: `row__${Date.now()}__${Math.random().toString(36).substr(2, 4)}`,
-      folio: '',
+      folio: (activeEvaluacion.evidenciasAnexo2.length + 1).toString(),
       fecha: new Date().toISOString().substring(0, 10),
       tipo: 'D',
       nombre: '',
@@ -1639,7 +1639,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
     if (isReadOnly) return;
     const newRow: EvidenciaFila = {
       id: `row__${Date.now()}__${Math.random().toString(36).substr(2, 4)}`,
-      folio: '',
+      folio: ((activeEvaluacion.evidenciasAnexo5?.length || 0) + 1).toString(),
       fecha: new Date().toISOString().substring(0, 10),
       tipo: 'D',
       nombre: '',
@@ -4932,23 +4932,23 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
 
           {/* Sub view toggle for teacher dashboard - Only shown in Seguimiento 1 */}
           {selectedPeriod === 1 && (
-            <div className="flex border-b border-slate-200" id="teacher-tabs">
+            <div className="flex justify-center items-center gap-4 py-4 border-b border-slate-200" id="teacher-tabs">
               <button
                 onClick={() => setPortalView('anexo2')}
-                className={`py-3 px-6 text-xs font-black uppercase tracking-widest border-b-2 transition-all cursor-pointer ${
+                className={`py-3 px-6 text-xs font-black uppercase tracking-widest rounded-xl border-2 transition-all shadow-sm cursor-pointer ${
                   portalMode === 'anexo2'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-700'
+                    ? 'border-emerald-600 bg-emerald-50 text-emerald-700 shadow-emerald-200'
+                    : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:border-emerald-300 hover:text-emerald-600'
                 }`}
               >
                 Tabla de Resumen de Evidencias Anexo 2
               </button>
               <button
                 onClick={() => setPortalView('compromisos')}
-                className={`py-3 px-6 text-xs font-black uppercase tracking-widest border-b-2 transition-all cursor-pointer ${
+                className={`py-3 px-6 text-xs font-black uppercase tracking-widest rounded-xl border-2 transition-all shadow-sm cursor-pointer ${
                   portalMode === 'compromisos'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-700'
+                    ? 'border-violet-600 bg-violet-50 text-violet-700 shadow-violet-200'
+                    : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:border-violet-300 hover:text-violet-600'
                 }`}
               >
                 Compromisos Anexo 5
