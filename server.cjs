@@ -40,21 +40,21 @@ var isDbBroken = false;
 function getDbPool() {
   if (isDbBroken) return null;
   if (!pgPool) {
-    const dbUrl = process.env.COCKROACH_DB_URL;
+    const dbUrl = process.env.DATABASE_URL;
     if (dbUrl && dbUrl.trim() !== "" && dbUrl !== '""') {
       try {
         pgPool = new Pool({
           connectionString: dbUrl,
           ssl: {
             rejectUnauthorized: false
-            // CockroachDB Cloud usually requires SSL
+            // PostgreSQL Cloud usually requires SSL
           },
           connectionTimeoutMillis: 5e3
           // Don't hang forever
         });
-        console.log("CockroachDB Pool initialized successfully.");
+        console.log("PostgreSQL Pool initialized successfully.");
       } catch (err) {
-        console.error("Failed to initialize CockroachDB Pool:", err);
+        console.error("Failed to initialize PostgreSQL Pool:", err);
         isDbBroken = true;
       }
     }
@@ -66,7 +66,7 @@ async function ensureDbTables() {
   if (!pool) return;
   try {
     const client = await pool.connect();
-    console.log("Checking and bootstraping CockroachDB tables...");
+    console.log("Checking and bootstraping PostgreSQL tables...");
     await client.query(`
       CREATE TABLE IF NOT EXISTS alvernia_evaluaciones_1278 (
         id TEXT PRIMARY KEY,
@@ -477,12 +477,12 @@ async function ensureDbTables() {
       ALTER TABLE alvernia_users ADD COLUMN IF NOT EXISTS plain_password TEXT;
       ALTER TABLE alvernia_caja_transacciones ADD COLUMN IF NOT EXISTS tercero TEXT;
     `);
-    console.log("CockroachDB tables are verified/created successfully.");
+    console.log("PostgreSQL tables are verified/created successfully.");
   } catch (err) {
-    console.error("Error ensuring CockroachDB tables:", err);
+    console.error("Error ensuring PostgreSQL tables:", err);
     const msg = err.message || "";
     if (msg.includes("password authentication failed") || msg.includes("authentication failed") || msg.includes("refused") || msg.includes("failed authentication attempts")) {
-      console.warn("CockroachDB authentication failed. Disabling CockroachDB to prevent lockouts and slow down start times.");
+      console.warn("PostgreSQL authentication failed. Disabling PostgreSQL to prevent lockouts and slow down start times.");
       isDbBroken = true;
       if (pgPool) {
         pgPool.end().catch(() => {
@@ -643,7 +643,7 @@ app.post("/api/login", async (req, res) => {
   }
 });
 app.get("/api/health", async (req, res) => {
-  const dbConfigured = !!process.env.COCKROACH_DB_URL;
+  const dbConfigured = !!process.env.DATABASE_URL;
   const r2Configured = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME);
   let dbStatus = "not_configured";
   if (isDbBroken) {
@@ -659,7 +659,7 @@ app.get("/api/health", async (req, res) => {
         dbStatus = `error: ${err.message || err}`;
         const msg = err.message || "";
         if (msg.includes("password authentication failed") || msg.includes("authentication failed") || msg.includes("refused") || msg.includes("failed authentication attempts")) {
-          console.warn("Disabling CockroachDB pool due to connection error in health check.");
+          console.warn("Disabling PostgreSQL pool due to connection error in health check.");
           isDbBroken = true;
           if (pgPool) {
             pgPool.end().catch(() => {
@@ -674,7 +674,7 @@ app.get("/api/health", async (req, res) => {
   }
   res.json({
     status: "ok",
-    cockroachDb: {
+    postgreSql: {
       configured: dbConfigured,
       status: dbStatus
     },
@@ -690,7 +690,7 @@ app.get("/api/evaluaciones", async (req, res) => {
     return res.status(200).json({
       success: false,
       fallback: true,
-      message: "CockroachDB no est\xC3\xA1 configurado o no se puede conectar. Usando almacenamiento local/Supabase."
+      message: "PostgreSQL no est\xC3\xA1 configurado o no se puede conectar. Usando almacenamiento local/Supabase."
     });
   }
   try {
@@ -714,10 +714,10 @@ app.get("/api/evaluaciones", async (req, res) => {
     }));
     res.json({ success: true, evaluaciones: mappedEvaluaciones });
   } catch (err) {
-    console.error("Error reading from CockroachDB:", err);
+    console.error("Error reading from PostgreSQL:", err);
     const msg = err.message || "";
     if (msg.includes("password authentication failed") || msg.includes("authentication failed") || msg.includes("refused") || msg.includes("failed authentication attempts")) {
-      console.warn("Disabling CockroachDB due to auth failure in get evaluations.");
+      console.warn("Disabling PostgreSQL due to auth failure in get evaluations.");
       isDbBroken = true;
       if (pgPool) {
         pgPool.end().catch(() => {
@@ -734,7 +734,7 @@ app.post("/api/evaluaciones", async (req, res) => {
     return res.status(200).json({
       success: false,
       fallback: true,
-      message: "CockroachDB no est\xC3\xA1 conectado. El guardado se almacen\xC3\xB3 localmente."
+      message: "PostgreSQL no est\xC3\xA1 conectado. El guardado se almacen\xC3\xB3 localmente."
     });
   }
   const {
@@ -797,12 +797,12 @@ app.post("/api/evaluaciones", async (req, res) => {
       portfolioPdfUrl || null,
       updatedAt || (/* @__PURE__ */ new Date()).toISOString()
     ]);
-    res.json({ success: true, message: `Evaluaci\xC3\xB3n guardada exitosamente en CockroachDB.` });
+    res.json({ success: true, message: `Evaluaci\xC3\xB3n guardada exitosamente en PostgreSQL.` });
   } catch (err) {
-    console.error("Error upserting evaluation in CockroachDB:", err);
+    console.error("Error upserting evaluation in PostgreSQL:", err);
     const msg = err.message || "";
     if (msg.includes("password authentication failed") || msg.includes("authentication failed") || msg.includes("refused") || msg.includes("failed authentication attempts")) {
-      console.warn("Disabling CockroachDB due to auth failure in post evaluations.");
+      console.warn("Disabling PostgreSQL due to auth failure in post evaluations.");
       isDbBroken = true;
       if (pgPool) {
         pgPool.end().catch(() => {
@@ -816,28 +816,28 @@ app.post("/api/evaluaciones", async (req, res) => {
 app.delete("/api/evaluaciones/teacher/:cedula/:periodo", async (req, res) => {
   const pool = getDbPool();
   if (!pool) {
-    return res.status(200).json({ success: false, fallback: true, message: "CockroachDB no est\xC3\xA1 conectado." });
+    return res.status(200).json({ success: false, fallback: true, message: "PostgreSQL no est\xC3\xA1 conectado." });
   }
   const { cedula, periodo } = req.params;
   try {
     await pool.query("DELETE FROM alvernia_evaluaciones_1278 WHERE cedula = $1 AND periodo = $2", [cedula, parseInt(periodo)]);
     res.json({ success: true, message: "Evaluaciones eliminadas exitosamente." });
   } catch (err) {
-    console.error("Error deleting evaluation from CockroachDB:", err);
+    console.error("Error deleting evaluation from PostgreSQL:", err);
     res.status(200).json({ success: false, fallback: true, error: err.message || err });
   }
 });
 app.delete("/api/evaluaciones/:id", async (req, res) => {
   const pool = getDbPool();
   if (!pool) {
-    return res.status(200).json({ success: false, fallback: true, message: "CockroachDB no est\xC3\xA1 conectado." });
+    return res.status(200).json({ success: false, fallback: true, message: "PostgreSQL no est\xC3\xA1 conectado." });
   }
   const { id } = req.params;
   try {
     await pool.query("DELETE FROM alvernia_evaluaciones_1278 WHERE id = $1", [id]);
     res.json({ success: true, message: "Evaluaci\xC3\xB3n eliminada exitosamente." });
   } catch (err) {
-    console.error("Error deleting evaluation from CockroachDB:", err);
+    console.error("Error deleting evaluation from PostgreSQL:", err);
     res.status(200).json({ success: false, fallback: true, error: err.message || err });
   }
 });
@@ -864,14 +864,14 @@ app.get("/api/novedades", async (req, res) => {
     }));
     res.json({ success: true, novedades: mappedNovedades });
   } catch (err) {
-    console.error("Error reading novedades from CockroachDB:", err);
+    console.error("Error reading novedades from PostgreSQL:", err);
     res.json({ success: false, fallback: true, error: err.message || err });
   }
 });
 app.post("/api/novedades", async (req, res) => {
   const pool = getDbPool();
   if (!pool) {
-    return res.json({ success: false, fallback: true, message: "CockroachDB no est\xC3\xA1 conectado." });
+    return res.json({ success: false, fallback: true, message: "PostgreSQL no est\xC3\xA1 conectado." });
   }
   const nov = req.body;
   if (!nov.id || !nov.empleadoId) {
@@ -913,14 +913,14 @@ app.post("/api/novedades", async (req, res) => {
     ]);
     res.json({ success: true, message: "Novedad guardada exitosamente." });
   } catch (err) {
-    console.error("Error saving novedad to CockroachDB:", err);
+    console.error("Error saving novedad to PostgreSQL:", err);
     res.json({ success: false, fallback: true, error: err.message || err });
   }
 });
 app.post("/api/novedades/bulk", async (req, res) => {
   const pool = getDbPool();
   if (!pool) {
-    return res.json({ success: false, fallback: true, message: "CockroachDB no est\xC3\xA1 conectado." });
+    return res.json({ success: false, fallback: true, message: "PostgreSQL no est\xC3\xA1 conectado." });
   }
   const { novedades } = req.body;
   if (!Array.isArray(novedades)) {
@@ -1010,14 +1010,14 @@ app.put("/api/novedades/:id", async (req, res) => {
 app.delete("/api/novedades/:id", async (req, res) => {
   const pool = getDbPool();
   if (!pool) {
-    return res.json({ success: false, fallback: true, message: "CockroachDB no est\xC3\xA1 conectado." });
+    return res.json({ success: false, fallback: true, message: "PostgreSQL no est\xC3\xA1 conectado." });
   }
   const { id } = req.params;
   try {
     await pool.query("DELETE FROM alvernia_novedades WHERE id = $1", [id]);
     res.json({ success: true, message: "Novedad eliminada." });
   } catch (err) {
-    console.error("Error deleting novedad from CockroachDB:", err);
+    console.error("Error deleting novedad from PostgreSQL:", err);
     res.json({ success: false, fallback: true, error: err.message || err });
   }
 });
@@ -1043,10 +1043,10 @@ app.get("/api/employees", async (req, res) => {
     }));
     res.json({ success: true, employees: mappedEmps });
   } catch (err) {
-    console.error("Error reading employees from CockroachDB:", err);
+    console.error("Error reading employees from PostgreSQL:", err);
     const msg = err.message || "";
     if (msg.includes("password authentication failed") || msg.includes("authentication failed") || msg.includes("refused") || msg.includes("failed authentication attempts")) {
-      console.warn("Disabling CockroachDB due to auth failure in get employees.");
+      console.warn("Disabling PostgreSQL due to auth failure in get employees.");
       isDbBroken = true;
       if (pgPool) {
         pgPool.end().catch(() => {
@@ -1060,7 +1060,7 @@ app.get("/api/employees", async (req, res) => {
 app.post("/api/employees/bulk", async (req, res) => {
   const pool = getDbPool();
   if (!pool) {
-    return res.json({ success: false, fallback: true, message: "CockroachDB no est\xC3\xA1 conectado." });
+    return res.json({ success: false, fallback: true, message: "PostgreSQL no est\xC3\xA1 conectado." });
   }
   const { employees } = req.body;
   if (!Array.isArray(employees)) {
@@ -1109,10 +1109,10 @@ app.post("/api/employees/bulk", async (req, res) => {
       client.release();
     }
   } catch (err) {
-    console.error("Error performing bulk import to CockroachDB:", err);
+    console.error("Error performing bulk import to PostgreSQL:", err);
     const msg = err.message || "";
     if (msg.includes("password authentication failed") || msg.includes("authentication failed") || msg.includes("refused") || msg.includes("failed authentication attempts")) {
-      console.warn("Disabling CockroachDB due to auth failure in bulk import.");
+      console.warn("Disabling PostgreSQL due to auth failure in bulk import.");
       isDbBroken = true;
       if (pgPool) {
         pgPool.end().catch(() => {
@@ -1126,7 +1126,7 @@ app.post("/api/employees/bulk", async (req, res) => {
 app.delete("/api/employees/:cedula", async (req, res) => {
   const pool = getDbPool();
   if (!pool) {
-    return res.json({ success: false, fallback: true, message: "CockroachDB no est\xC3\xA1 conectado." });
+    return res.json({ success: false, fallback: true, message: "PostgreSQL no est\xC3\xA1 conectado." });
   }
   const { cedula } = req.params;
   try {
@@ -1144,14 +1144,14 @@ app.delete("/api/employees/:cedula", async (req, res) => {
       client.release();
     }
   } catch (err) {
-    console.error("Error deleting employee from CockroachDB:", err);
+    console.error("Error deleting employee from PostgreSQL:", err);
     res.json({ success: false, fallback: true, error: err.message || err });
   }
 });
 async function getDocentesEvaluacion(_req, res) {
   const pool = getDbPool();
   if (!pool) {
-    return res.status(500).json({ success: false, message: "CockroachDB pool is not initialized" });
+    return res.status(500).json({ success: false, message: "PostgreSQL pool is not initialized" });
   }
   try {
     const result = await pool.query("SELECT * FROM alvernia_docentes_evaluacion ORDER BY nombre ASC");
@@ -1181,7 +1181,7 @@ async function getDocentesEvaluacion(_req, res) {
 async function bulkUpsertDocentesEvaluacion(req, res) {
   const pool = getDbPool();
   if (!pool) {
-    return res.status(500).json({ success: false, message: "CockroachDB pool is not initialized" });
+    return res.status(500).json({ success: false, message: "PostgreSQL pool is not initialized" });
   }
   const docentes = req.body.docentes || req.body.docentesEvaluacion;
   if (!Array.isArray(docentes) || docentes.length === 0) {
@@ -1243,7 +1243,7 @@ async function bulkUpsertDocentesEvaluacion(req, res) {
 async function deleteDocenteEvaluacion(req, res) {
   const pool = getDbPool();
   if (!pool) {
-    return res.status(500).json({ success: false, message: "CockroachDB pool is not initialized" });
+    return res.status(500).json({ success: false, message: "PostgreSQL pool is not initialized" });
   }
   let { cedula } = req.params;
   if (cedula && cedula.startsWith("emp__")) {
@@ -1266,7 +1266,7 @@ app.delete("/api/docentesEvaluacion/:cedula", deleteDocenteEvaluacion);
 app.put("/api/employees/:cedula", async (req, res) => {
   const pool = getDbPool();
   if (!pool) {
-    return res.json({ success: false, fallback: true, message: "CockroachDB no est\xC3\xA1 conectado." });
+    return res.json({ success: false, fallback: true, message: "PostgreSQL no est\xC3\xA1 conectado." });
   }
   const { cedula } = req.params;
   const { nombre, cargo, sedeTrabajo, dificilAcceso, horasAula, horasLibres, areaDesempeno, tipoNombramiento } = req.body;
@@ -1296,13 +1296,13 @@ app.put("/api/employees/:cedula", async (req, res) => {
       client.release();
     }
   } catch (err) {
-    console.error("Error updating employee in CockroachDB:", err);
+    console.error("Error updating employee in PostgreSQL:", err);
     res.json({ success: false, fallback: true, error: err.message || err });
   }
 });
 app.get("/api/actas", async (req, res) => {
   const pool = getDbPool();
-  if (!pool) return res.status(503).json({ error: "CockroachDB no disponible" });
+  if (!pool) return res.status(503).json({ error: "PostgreSQL no disponible" });
   try {
     const { rows } = await pool.query("SELECT * FROM alvernia_actas_generales ORDER BY updated_at DESC");
     const mappedActas = rows.map((r) => ({
@@ -1326,7 +1326,7 @@ app.get("/api/actas", async (req, res) => {
 });
 app.post("/api/actas", async (req, res) => {
   const pool = getDbPool();
-  if (!pool) return res.status(503).json({ error: "CockroachDB no disponible" });
+  if (!pool) return res.status(503).json({ error: "PostgreSQL no disponible" });
   try {
     const acta = req.body;
     if (!acta || !acta.id) {
@@ -1372,7 +1372,7 @@ app.post("/api/actas", async (req, res) => {
 });
 app.delete("/api/actas/:id", async (req, res) => {
   const pool = getDbPool();
-  if (!pool) return res.status(503).json({ error: "CockroachDB no disponible" });
+  if (!pool) return res.status(503).json({ error: "PostgreSQL no disponible" });
   try {
     await pool.query("DELETE FROM alvernia_actas_generales WHERE id = $1", [req.params.id]);
     res.json({ success: true });
@@ -1383,7 +1383,7 @@ app.delete("/api/actas/:id", async (req, res) => {
 });
 app.get("/api/actas-seguimiento", async (req, res) => {
   const pool = getDbPool();
-  if (!pool) return res.status(503).json({ error: "CockroachDB no disponible" });
+  if (!pool) return res.status(503).json({ error: "PostgreSQL no disponible" });
   try {
     const { rows } = await pool.query("SELECT * FROM alvernia_actas_seguimiento ORDER BY updated_at DESC");
     const mappedActas = rows.map((r) => ({
@@ -1407,7 +1407,7 @@ app.get("/api/actas-seguimiento", async (req, res) => {
 });
 app.post("/api/actas-seguimiento", async (req, res) => {
   const pool = getDbPool();
-  if (!pool) return res.status(503).json({ error: "CockroachDB no disponible" });
+  if (!pool) return res.status(503).json({ error: "PostgreSQL no disponible" });
   try {
     const acta = req.body;
     if (!acta || !acta.id) {
@@ -1453,7 +1453,7 @@ app.post("/api/actas-seguimiento", async (req, res) => {
 });
 app.delete("/api/actas-seguimiento/:id", async (req, res) => {
   const pool = getDbPool();
-  if (!pool) return res.status(503).json({ error: "CockroachDB no disponible" });
+  if (!pool) return res.status(503).json({ error: "PostgreSQL no disponible" });
   try {
     await pool.query("DELETE FROM alvernia_actas_seguimiento WHERE id = $1", [req.params.id]);
     res.json({ success: true });
@@ -1468,7 +1468,7 @@ app.get("/api/alvernia/config", async (req, res) => {
     return res.json({
       success: false,
       fallback: true,
-      message: "CockroachDB no est\xC3\xA1 conectado o configurado. Usando almacenamiento local."
+      message: "PostgreSQL no est\xC3\xA1 conectado o configurado. Usando almacenamiento local."
     });
   }
   try {
@@ -1501,10 +1501,10 @@ app.get("/api/alvernia/config", async (req, res) => {
         }
       });
     } else {
-      res.json({ success: false, message: "No se encontr\xC3\xB3 configuraci\xC3\xB3n guardada en CockroachDB." });
+      res.json({ success: false, message: "No se encontr\xC3\xB3 configuraci\xC3\xB3n guardada en PostgreSQL." });
     }
   } catch (err) {
-    console.error("Error reading config from CockroachDB:", err);
+    console.error("Error reading config from PostgreSQL:", err);
     res.json({ success: false, fallback: true, error: err.message || err });
   }
 });
@@ -1514,7 +1514,7 @@ app.post("/api/alvernia/config", async (req, res) => {
     return res.status(200).json({
       success: false,
       fallback: true,
-      message: "CockroachDB no est\xC3\xA1 conectado o configurado. Par\xC3\xA1metros guardados localmente."
+      message: "PostgreSQL no est\xC3\xA1 conectado o configurado. Par\xC3\xA1metros guardados localmente."
     });
   }
   const {
@@ -1623,11 +1623,11 @@ app.post("/api/alvernia/config", async (req, res) => {
     ]);
     res.json({
       success: true,
-      message: "Configuraci\xC3\xB3n y par\xC3\xA1metros actualizados con \xC3\xA9xito en CockroachDB y R2.",
+      message: "Configuraci\xC3\xB3n y par\xC3\xA1metros actualizados con \xC3\xA9xito en PostgreSQL y R2.",
       signatureUrl
     });
   } catch (err) {
-    console.error("Error saving config to CockroachDB:", err);
+    console.error("Error saving config to PostgreSQL:", err);
     res.status(500).json({ success: false, error: err.message || err });
   }
 });
