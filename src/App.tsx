@@ -508,7 +508,13 @@ export default function App() {
   // Persistir docentes de evaluación en localStorage
   useEffect(() => {
     localStorage.setItem('alvernia_docentes_evaluacion', JSON.stringify(docentesEvaluacion));
-  }, [docentesEvaluacion]);
+    if (currentTeacher) {
+      const updated = docentesEvaluacion.find(d => d.cedula === currentTeacher.cedula);
+      if (updated && JSON.stringify(updated) !== JSON.stringify(currentTeacher)) {
+        setCurrentTeacher(updated);
+      }
+    }
+  }, [docentesEvaluacion, currentTeacher]);
 
   // Sync to database
   useEffect(() => {

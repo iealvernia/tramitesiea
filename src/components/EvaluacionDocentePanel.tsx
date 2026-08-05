@@ -224,6 +224,159 @@ const SUGGESTED_FUNCTIONALS: { competencia: string; area: 'Académica' | 'Admini
   }
 ];
 
+export const SUGGESTED_FUNCTIONALS_ORIENTADOR: { competencia: string; area: 'Académica' | 'Administrativa' | 'Comunitaria'; contribucion: string; criterios: string; evidencias: string; porcentaje?: number; }[] = [
+  {
+    competencia: 'Dominio profesional de la orientación escolar',
+    area: 'Académica',
+    contribucion: 'Aplicar conocimientos científicos, pedagógicos, psicológicos, normativos y técnicos propios de la orientación escolar.',
+    criterios: 'Demuestra conocimientos actualizados sobre desarrollo humano, orientación escolar, convivencia, inclusión y educación socioemocional.',
+    evidencias: 'Plan Anual de Orientación Escolar articulado con el PEI.',
+    porcentaje: 12.5
+  },
+  {
+    competencia: 'Planeación y organización de la orientación escolar',
+    area: 'Académica',
+    contribucion: 'Planificar, organizar y ejecutar las acciones contempladas en el Plan de Orientación Escolar.',
+    criterios: 'Elabora el Plan Anual de Orientación Escolar articulado con el PEI.',
+    evidencias: 'Cronogramas de actividades, registros organizados de acciones.',
+    porcentaje: 12.5
+  },
+  {
+    competencia: 'Pedagógica y didáctica',
+    area: 'Académica',
+    contribucion: 'Diseñar e implementar estrategias pedagógicas orientadas al desarrollo humano y la formación integral.',
+    criterios: 'Diseña talleres pedagógicos acordes con las necesidades de la comunidad educativa.',
+    evidencias: 'Guías de talleres, registros de asistencia a escuelas de familias.',
+    porcentaje: 12.5
+  },
+  {
+    competencia: 'Evaluación y seguimiento de los procesos de orientación',
+    area: 'Académica',
+    contribucion: 'Valorar el impacto de las acciones desarrolladas y generar procesos de mejoramiento.',
+    criterios: 'Realiza seguimiento a los casos atendidos y evalúa el impacto.',
+    evidencias: 'Informes de seguimiento de casos, documentos de avance.',
+    porcentaje: 12.5
+  },
+  {
+    competencia: 'Uso de recursos',
+    area: 'Administrativa',
+    contribucion: 'Administrar responsablemente los recursos institucionales destinados al proceso de orientación.',
+    criterios: 'Administra adecuadamente los recursos asignados al servicio de orientación.',
+    evidencias: 'Inventario, reportes de uso de espacios.',
+    porcentaje: 5.0
+  },
+  {
+    competencia: 'Seguimiento de procesos',
+    area: 'Administrativa',
+    contribucion: 'Participar en los procesos institucionales y realizar seguimiento a las acciones de orientación.',
+    criterios: 'Cumple oportunamente con las actividades programadas en el calendario institucional.',
+    evidencias: 'Actas de comités institucionales, informes técnicos.',
+    porcentaje: 5.0
+  },
+  {
+    competencia: 'Comunicación institucional',
+    area: 'Comunitaria',
+    contribucion: 'Establecer relaciones de colaboración y comunicación efectiva con la comunidad educativa.',
+    criterios: 'Mantiene comunicación permanente con docentes, directivos y familias.',
+    evidencias: 'Registros de asesoría a docentes y padres de familia.',
+    porcentaje: 5.0
+  },
+  {
+    competencia: 'Interacción con la comunidad y el entorno',
+    area: 'Comunitaria',
+    contribucion: 'Articular acciones con entidades externas y fortalecer el trabajo con las familias.',
+    criterios: 'Establece redes de apoyo interinstitucional.',
+    evidencias: 'Actas de reuniones con sector salud, protección, justicia.',
+    porcentaje: 5.0
+  }
+];
+
+export const OFFICIAL_EVALUATION_CRITERIA_ORIENTADOR: Record<string, string[]> = {
+  'Dominio profesional de la orientación escolar': [
+    'Demuestra conocimientos actualizados sobre desarrollo humano, orientación escolar, convivencia, inclusión y educación socioemocional.',
+    'Aplica fundamentos psicológicos, pedagógicos y sociales en la atención individual y grupal.',
+    'Conoce e implementa la normativa relacionada con convivencia escolar, inclusión, protección integral y derechos de los niños, niñas y adolescentes.',
+    'Orienta sus actuaciones conforme al Proyecto Educativo Institucional, el Manual de Convivencia y las políticas institucionales.',
+    'Identifica factores de riesgo y factores protectores que afectan el desarrollo integral de los estudiantes.',
+    'Conoce las rutas de atención integral y los protocolos institucionales para la atención de situaciones que afectan la convivencia escolar.',
+    'Propone estrategias de mejoramiento para fortalecer el bienestar y el desarrollo socioemocional de los estudiantes.',
+    'Mantiene actualización permanente en temas relacionados con orientación escolar.'
+  ],
+  'Planeación y organización de la orientación escolar': [
+    'Elabora el Plan Anual de Orientación Escolar articulado con el PEI.',
+    'Organiza cronogramas de actividades de promoción, prevención e intervención.',
+    'Establece prioridades de atención de acuerdo con las necesidades institucionales.',
+    'Diseña planes de intervención individual y grupal.',
+    'Organiza campañas de prevención y promoción del bienestar.',
+    'Programa actividades dirigidas a estudiantes, docentes y familias.',
+    'Lleva registros organizados de las acciones desarrolladas.',
+    'Realiza seguimiento periódico al cumplimiento del plan de orientación.'
+  ],
+  'Pedagógica y didáctica': [
+    'Diseña talleres pedagógicos acordes con las necesidades de la comunidad educativa.',
+    'Desarrolla estrategias para fortalecer habilidades socioemocionales.',
+    'Implementa programas de prevención del acoso escolar, violencia, consumo de sustancias psicoactivas, embarazo adolescente, suicidio y demás factores de riesgo.',
+    'Promueve estrategias para el fortalecimiento de la convivencia escolar.',
+    'Adapta las estrategias de intervención según las características de los estudiantes.',
+    'Orienta procesos de educación para la ciudadanía y resolución pacífica de conflictos.',
+    'Asesora a docentes en estrategias de manejo de aula e inclusión.',
+    'Desarrolla escuelas de familias y espacios de formación para padres y acudientes.'
+  ],
+  'Evaluación y seguimiento de los procesos de orientación': [
+    'Realiza seguimiento a los casos atendidos.',
+    'Evalúa el impacto de las intervenciones individuales y grupales.',
+    'Establece indicadores para valorar los programas desarrollados.',
+    'Identifica estudiantes que requieren acompañamiento especializado.',
+    'Realiza seguimiento a estudiantes remitidos a entidades externas.',
+    'Analiza información institucional para orientar acciones preventivas.',
+    'Formula acciones de mejoramiento a partir de los resultados obtenidos.',
+    'Documenta los avances y resultados de los procesos de orientación.'
+  ],
+  'Uso de recursos': [
+    'Administra adecuadamente los recursos asignados al servicio de orientación.',
+    'Organiza y conserva los registros e instrumentos de atención.',
+    'Garantiza la confidencialidad de la información de los estudiantes.',
+    'Utiliza adecuadamente los espacios destinados a la orientación escolar.',
+    'Hace uso responsable de materiales y recursos tecnológicos.',
+    'Gestiona recursos institucionales para fortalecer los programas de orientación.',
+    'Promueve el uso adecuado de los recursos institucionales por parte de la comunidad educativa.'
+  ],
+  'Seguimiento de procesos': [
+    'Cumple oportunamente con las actividades programadas en el calendario institucional.',
+    'Participa activamente en los comités institucionales que le corresponden.',
+    'Presenta informes técnicos oportunamente.',
+    'Mantiene actualizados los registros de atención.',
+    'Realiza seguimiento a compromisos adquiridos con estudiantes y familias.',
+    'Articula acciones con directivos y docentes.',
+    'Activa oportunamente las rutas de atención cuando se requiere.',
+    'Realiza seguimiento a los casos remitidos a entidades externas.',
+    'Participa en procesos de autoevaluación institucional.',
+    'Propone acciones para el mejoramiento institucional.'
+  ],
+  'Comunicación institucional': [
+    'Mantiene comunicación permanente con docentes, directivos y familias.',
+    'Asesora a docentes en el manejo de situaciones convivenciales y socioemocionales.',
+    'Orienta a padres de familia sobre estrategias de acompañamiento.',
+    'Participa activamente en el Comité Escolar de Convivencia.',
+    'Promueve espacios de diálogo y mediación.',
+    'Fortalece la cultura institucional basada en el respeto y la inclusión.',
+    'Fomenta el trabajo colaborativo entre los diferentes estamentos institucionales.',
+    'Contribuye al fortalecimiento del clima escolar.'
+  ],
+  'Interacción con la comunidad y el entorno': [
+    'Identifica las necesidades sociales de la comunidad educativa.',
+    'Establece redes de apoyo interinstitucional.',
+    'Articula acciones con el sector salud, protección, justicia y bienestar social.',
+    'Realiza remisiones a las entidades competentes cuando corresponde.',
+    'Hace seguimiento a las atenciones brindadas por las entidades externas.',
+    'Desarrolla estrategias para fortalecer la participación de las familias.',
+    'Promueve proyectos de prevención y promoción con entidades externas.',
+    'Participa en mesas interinstitucionales relacionadas con infancia, adolescencia y convivencia escolar.',
+    'Fortalece la corresponsabilidad entre familia, escuela y comunidad.',
+    'Incorpora las características socioculturales del contexto en las estrategias de orientación.'
+  ]
+};
+
 export const OFFICIAL_EVALUATION_CRITERIA: Record<string, string[]> = {
   'Dominio curricular': [
     'Demuestra conocimientos actualizados y dominio de su disciplina y de las áreas a cargo.',
@@ -393,6 +546,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
 
   // Active form state for logged-in teacher
   const [activeEvaluacion, setActiveEvaluacion] = useState<Evaluacion1278 | null>(null);
+
+  const isOrientador = currentTeacher?.cargo?.toLowerCase().includes('orientador');
+  const currentSuggestedFunctionals = isOrientador ? SUGGESTED_FUNCTIONALS_ORIENTADOR : SUGGESTED_FUNCTIONALS;
+  const currentOfficialCriteria = isOrientador ? OFFICIAL_EVALUATION_CRITERIA_ORIENTADOR : OFFICIAL_EVALUATION_CRITERIA;
 
   // Selected comportamentales for active evaluation
   const [compSel1, setCompSel1] = useState(COMPORTAMENTALES_OPCIONES[0]);
@@ -703,13 +860,13 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
   // Auto-open profile modal when teacher logs in and has missing fields
   useEffect(() => {
     if (currentTeacher) {
+      const isMissing = !currentTeacher.lugarExpedicionCedula || 
+                        !currentTeacher.correoElectronico || 
+                        !currentTeacher.numeroCelular || 
+                        !currentTeacher.areaDesempeno || 
+                        !currentTeacher.firmaDocente;
+
       if (currentTeacher.id !== lastCheckedTeacherId) {
-        setLastCheckedTeacherId(currentTeacher.id);
-        const isMissing = !currentTeacher.lugarExpedicionCedula || 
-                          !currentTeacher.correoElectronico || 
-                          !currentTeacher.numeroCelular || 
-                          !currentTeacher.areaDesempeno || 
-                          !currentTeacher.firmaDocente;
         
         // Use transition to avoid blocking the main thread when updating these states
         React.startTransition(() => {
@@ -726,11 +883,14 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
             setIsProfileModalOpen(true);
           }, 400);
         }
+        setLastCheckedTeacherId(currentTeacher.id);
+      } else if (!isMissing && isProfileModalOpen) {
+        setIsProfileModalOpen(false);
       }
     } else {
       setLastCheckedTeacherId(null);
     }
-  }, [currentTeacher, lastCheckedTeacherId]);
+  }, [currentTeacher, lastCheckedTeacherId, isProfileModalOpen]);
 
   const handleSaveProfile = async () => {
     if (!currentTeacher || !setDocentesEvaluacion) return;
@@ -963,7 +1123,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
           fechaConcertacion: new Date().toISOString().substring(0, 10),
           horaConcertacion: '08:00 AM',
           lugarConcertacion: institutionName,
-          compromisosFuncionales: SUGGESTED_FUNCTIONALS.map(f => ({ 
+          compromisosFuncionales: currentSuggestedFunctionals.map(f => ({ 
             ...f,
             contribucion: '',
             criterios: '',
@@ -1903,22 +2063,46 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
   const handleExportWordModelFormat = (teacher: DocenteEvaluacion) => {
     const customLogo = localStorage.getItem('iea_custom_logo') || '';
 
-    const defaultCompetencies = [
-      { area: 'ACADÉMICA', comp: 'DOMINIO CURRICULAR', cont: 'Preparador de clases grado tercero área de lenguaje en medio digital PDF', ev: 'Fotocopia planeador de clases grado tercero área de lenguaje en medio digital PDF', desc: 'Demostrar la planificación y organización de las clases de Lenguaje para el grado tercero, asegurando una educación de calidad y dando cumplimiento a los planes de estudio.' },
-      { area: 'ACADÉMICA', comp: 'PLANEACIÓN Y ORGANIZACIÓN ACADÉMICA', cont: 'Apoyo a la ejecución del proyecto LEO (lectura, escritura y oralidad) por medio de talleres en clases', ev: 'Fotocopia de talleres y registro fotográfico de trabajo en clases proyecto LEO', desc: 'Trabajar en el desarrollo y la implementación del proyecto LEO en el aula, destacando el compromiso con la mejora de las habilidades lingüísticas y comunicativas de los estudiantes, alcanzando con ello una mejor comprensión de lectura crítica e inferencia en la vida.' },
-      { area: 'ACADÉMICA', comp: 'PEDAGÓGICA Y DIDÁCTICA', cont: 'Elaboración y adaptación de material didáctico para grado preescolar', ev: 'Registro fotográfico de elaboración de material didáctico para grado preescolar', desc: 'Elaboración de material didáctico con recursos educativos del entorno adaptados a las necesidades de los estudiantes de preescolar, el cual permitió personalizar el aprendizaje de las habilidades individuales de cada estudiante logrando un aprendizaje participativo y significativo.' },
-      { area: 'ACADÉMICA', comp: 'EVALUACIÓN DE APRENDIZAJE', cont: 'Adaptación de talleres de inclusión en el área de lenguaje para grado tercero', ev: 'Fotocopia talleres de inclusión y registro fotográfico con estudiantes de grado tercero', desc: 'A través de estos talleres, se puede demostrar claramente el esfuerzo y progreso en relación con los compromisos acordados, tanto del estudiante como del padre de familia en el proceso educativo inclusivo.' },
-      { area: 'ADMINISTRATIVA', comp: 'USO DE RECURSOS', cont: 'Adecuación de espacios en el aula de clases para el uso adecuado de las herramientas TIC', ev: 'Registro fotográfico de adecuación de espacios y uso de las herramientas TIC', desc: 'Se puede observar que los niños usan los computadores para dibujar, escribir, buscar información, también podemos verlos utilizando la pantalla digital evidenciando así que las herramientas TIC se usan para fines educativos.' },
-      { area: 'ADMINISTRATIVA', comp: 'SEGUIMIENTO DE PROCESOS', cont: 'Cumplir con las actividades programadas en el cronograma 2025 (día de la mujer, elección de gobierno escolar y encuentro cultural institucional)', ev: 'Registro fotográfico encuentro cultural institucional', desc: 'Este encuentro cultural institucional promueve el liderazgo, la interculturalidad, la inclusión además de crear espacios para fomentar la creatividad, el intercambio de expresiones artísticas, conocimientos, tradiciones y costumbres.' },
-      { area: 'COMUNITARIA', comp: 'COMUNICACIÓN INSTITUCIONAL', cont: 'Acompañamiento al proyecto escuela para padres', ev: 'Asistencia y registro fotográfico de talleres lúdicos pedagógicos con padres de familia en la ejecución del proyecto escuela de padres', desc: 'Mostrar la participación de los padres de familia y su compromiso con la educación de sus hijos.' },
-      { area: 'COMUNITARIA', comp: 'INTERACCIÓN CON LA COMUNIDAD Y EL ENTORNO', cont: 'Participación de los padres de familia en el mantenimiento del entorno escolar', ev: 'Registro fotográfico y asistencias de padres de familia en el mantenimiento del entorno escolar', desc: 'Participación de los padres de familia en el cuidado y mantenimiento del entorno escolar.' },
-      { area: 'COMPORTAMENTALES', comp: 'COMPROMISO SOCIAL E INSTITUCIONAL', cont: 'Apoyar en las diferentes actividades realizadas en la institución durante el año escolar 2025', ev: 'Registro fotográfico de participación en actividades institucionales.', desc: 'Fomentar el trabajo en equipo, la comunicación y participación de los docentes en las actividades institucionales.' },
-      { area: 'COMPORTAMENTALES', comp: 'TRABAJO EN EQUIPO', cont: 'Ejecución del proyecto ambiental escolar, en convenio con Confamiliar del Putumayo', ev: 'Fotocopia cronograma de actividades y registro fotográfico desarrollo proyecto ambiental escolar', desc: 'Destacar la importancia y los beneficios de la huerta escolar en la formación escolar de los estudiantes, logrando estimular el compañerismo, trabajo en equipo y la educación transversal, además de reconocer la importancia de una alimentación balanceada.' },
-      { area: 'COMPORTAMENTALES', comp: 'LIDERAZGO', cont: 'Desarrollo del plan de Bilingüismo con estudiantes de la sede', ev: 'Registro fotográfico ejecución plan de Bilingüismo', desc: 'Con el proyecto de bilingüismo se logró fortalecer la segunda lengua (inglés) adaptándolo al entorno y a la necesidad de motivar una cultura ambiental.' }
-    ];
+    let competenciesToUse: any[] = [];
+    const evalS1 = evaluaciones.find(e => e.cedula === teacher.cedula && Number(e.periodo) === 1);
+    
+    if (evalS1 && (evalS1.compromisosFuncionales.length > 0 || evalS1.compromisosComportamentales.length > 0)) {
+      evalS1.compromisosFuncionales.forEach(c => {
+        competenciesToUse.push({
+          area: c.area.toUpperCase(),
+          comp: c.competencia.toUpperCase(),
+          cont: c.contribucion || '',
+          ev: 'Registro fotográfico de participación en actividades institucionales.',
+          desc: c.evidencias || ''
+        });
+      });
+      evalS1.compromisosComportamentales.forEach(c => {
+        competenciesToUse.push({
+          area: 'COMPORTAMENTALES',
+          comp: c.competencia.toUpperCase(),
+          cont: 'Aplicación de criterios conductuales y actitudes esperadas.',
+          ev: 'Registro fotográfico de participación en actividades institucionales.',
+          desc: c.evidencias || ''
+        });
+      });
+    } else {
+      competenciesToUse = [
+        { area: 'ACADÉMICA', comp: 'DOMINIO CURRICULAR', cont: 'Preparador de clases grado tercero área de lenguaje en medio digital PDF', ev: 'Fotocopia planeador de clases grado tercero área de lenguaje en medio digital PDF', desc: 'Demostrar la planificación y organización de las clases de Lenguaje para el grado tercero, asegurando una educación de calidad y dando cumplimiento a los planes de estudio.' },
+        { area: 'ACADÉMICA', comp: 'PLANEACIÓN Y ORGANIZACIÓN ACADÉMICA', cont: 'Apoyo a la ejecución del proyecto LEO (lectura, escritura y oralidad) por medio de talleres en clases', ev: 'Fotocopia de talleres y registro fotográfico de trabajo en clases proyecto LEO', desc: 'Trabajar en el desarrollo y la implementación del proyecto LEO en el aula, destacando el compromiso con la mejora de las habilidades lingüísticas y comunicativas de los estudiantes, alcanzando con ello una mejor comprensión de lectura crítica e inferencia en la vida.' },
+        { area: 'ACADÉMICA', comp: 'PEDAGÓGICA Y DIDÁCTICA', cont: 'Elaboración y adaptación de material didáctico para grado preescolar', ev: 'Registro fotográfico de elaboración de material didáctico para grado preescolar', desc: 'Elaboración de material didáctico con recursos educativos del entorno adaptados a las necesidades de los estudiantes de preescolar, el cual permitió personalizar el aprendizaje de las habilidades individuales de cada estudiante logrando un aprendizaje participativo y significativo.' },
+        { area: 'ACADÉMICA', comp: 'EVALUACIÓN DE APRENDIZAJE', cont: 'Adaptación de talleres de inclusión en el área de lenguaje para grado tercero', ev: 'Fotocopia talleres de inclusión y registro fotográfico con estudiantes de grado tercero', desc: 'A través de estos talleres, se puede demostrar claramente el esfuerzo y progreso en relación con los compromisos acordados, tanto del estudiante como del padre de familia en el proceso educativo inclusivo.' },
+        { area: 'ADMINISTRATIVA', comp: 'USO DE RECURSOS', cont: 'Adecuación de espacios en el aula de clases para el uso adecuado de las herramientas TIC', ev: 'Registro fotográfico de adecuación de espacios y uso de las herramientas TIC', desc: 'Se puede observar que los niños usan los computadores para dibujar, escribir, buscar información, también podemos verlos utilizando la pantalla digital evidenciando así que las herramientas TIC se usan para fines educativos.' },
+        { area: 'ADMINISTRATIVA', comp: 'SEGUIMIENTO DE PROCESOS', cont: 'Cumplir con las actividades programadas en el cronograma 2025 (día de la mujer, elección de gobierno escolar y encuentro cultural institucional)', ev: 'Registro fotográfico encuentro cultural institucional', desc: 'Este encuentro cultural institucional promueve el liderazgo, la interculturalidad, la inclusión además de crear espacios para fomentar la creatividad, el intercambio de expresiones artísticas, conocimientos, tradiciones y costumbres.' },
+        { area: 'COMUNITARIA', comp: 'COMUNICACIÓN INSTITUCIONAL', cont: 'Acompañamiento al proyecto escuela para padres', ev: 'Asistencia y registro fotográfico de talleres lúdicos pedagógicos con padres de familia en la ejecución del proyecto escuela de padres', desc: 'Mostrar la participación de los padres de familia y su compromiso con la educación de sus hijos.' },
+        { area: 'COMUNITARIA', comp: 'INTERACCIÓN CON LA COMUNIDAD Y EL ENTORNO', cont: 'Participación de los padres de familia en el mantenimiento del entorno escolar', ev: 'Registro fotográfico y asistencias de padres de familia en el mantenimiento del entorno escolar', desc: 'Participación de los padres de familia en el cuidado y mantenimiento del entorno escolar.' },
+        { area: 'COMPORTAMENTALES', comp: 'COMPROMISO SOCIAL E INSTITUCIONAL', cont: 'Apoyar en las diferentes actividades realizadas en la institución durante el año escolar 2025', ev: 'Registro fotográfico de participación en actividades institucionales.', desc: 'Fomentar el trabajo en equipo, la comunicación y participación de los docentes en las actividades institucionales.' },
+        { area: 'COMPORTAMENTALES', comp: 'TRABAJO EN EQUIPO', cont: 'Ejecución del proyecto ambiental escolar, en convenio con Confamiliar del Putumayo', ev: 'Fotocopia cronograma de actividades y registro fotográfico desarrollo proyecto ambiental escolar', desc: 'Destacar la importancia y los beneficios de la huerta escolar en la formación escolar de los estudiantes, logrando estimular el compañerismo, trabajo en equipo y la educación transversal, además de reconocer la importancia de una alimentación balanceada.' },
+        { area: 'COMPORTAMENTALES', comp: 'LIDERAZGO', cont: 'Desarrollo del plan de Bilingüismo con estudiantes de la sede', ev: 'Registro fotográfico ejecución plan de Bilingüismo', desc: 'Con el proyecto de bilingüismo se logró fortalecer la segunda lengua (inglés) adaptándolo al entorno y a la necesidad de motivar una cultura ambiental.' }
+      ];
+    }
 
     let competenciesHtml = '';
-    defaultCompetencies.forEach((c) => {
+    competenciesToUse.forEach((c) => {
       competenciesHtml += `
         <div>
           <br/><br/>
@@ -2385,7 +2569,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
               <th class="col-header" style="width: 25%;">Evidencias Propuestas</th>
             </tr>
             ${functionalCommitments.map(cf => {
-              const pctVal = cf.porcentaje !== undefined ? cf.porcentaje : (SUGGESTED_FUNCTIONALS.find(sf => sf.competencia === cf.competencia)?.porcentaje || 0);
+              const pctVal = cf.porcentaje !== undefined ? cf.porcentaje : (currentSuggestedFunctionals.find(sf => sf.competencia === cf.competencia)?.porcentaje || 0);
               return `
             <tr>
               <td style="font-size: 8.5pt;">
@@ -3732,6 +3916,9 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
             <div className="bg-slate-800 px-4 py-2 rounded-xl text-right">
               <p className="text-xs font-bold text-blue-400 uppercase tracking-widest leading-none">Sesión Docente:</p>
               <p className="text-sm font-black text-white mt-1 leading-none">{currentTeacher.nombre}</p>
+              <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase tracking-wide">
+                C.C. {currentTeacher.cedula} | {currentTeacher.cargo}
+              </p>
             </div>
             <button
               onClick={() => setIsProfileModalOpen(true)}
@@ -5124,7 +5311,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                             onChange={(e) => handleFunctionalChange(index, 'contribucion', e.target.value)}
                             rows={3}
                             className="w-full p-2.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder={SUGGESTED_FUNCTIONALS.find(s => s.competencia === cf.competencia)?.contribucion || "Escriba la contribución concreta..."}
+                            placeholder={currentSuggestedFunctionals.find(s => s.competencia === cf.competencia)?.contribucion || "Escriba la contribución concreta..."}
                           />
                         </div>
 
@@ -5137,10 +5324,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                                 const currentCriteria = cf.criterios || '';
                                 setActiveCriteriaSelectorIndex(index);
                                 setIsCriteriaSelectorForAdmin(false);
-                                const matchKey = Object.keys(OFFICIAL_EVALUATION_CRITERIA).find(
+                                const matchKey = Object.keys(currentOfficialCriteria).find(
                                   key => key.toLowerCase().trim() === cf.competencia.toLowerCase().trim()
                                 ) || cf.competencia;
-                                const options = OFFICIAL_EVALUATION_CRITERIA[matchKey] || [];
+                                const options = currentOfficialCriteria[matchKey] || [];
                                 // Pre-select options that are already in currentCriteria
                                 const preselected = options.filter(opt => 
                                   currentCriteria.toLowerCase().includes(opt.toLowerCase().trim()) ||
@@ -5159,7 +5346,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                             onChange={(e) => handleFunctionalChange(index, 'criterios', e.target.value)}
                             rows={3}
                             className="w-full p-2.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder={SUGGESTED_FUNCTIONALS.find(s => s.competencia === cf.competencia)?.criterios || "Escriba los criterios de evaluación..."}
+                            placeholder={currentSuggestedFunctionals.find(s => s.competencia === cf.competencia)?.criterios || "Escriba los criterios de evaluación..."}
                           />
                         </div>
 
@@ -5170,7 +5357,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                             onChange={(e) => handleFunctionalChange(index, 'evidencias', e.target.value)}
                             rows={3}
                             className="w-full p-2.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder={SUGGESTED_FUNCTIONALS.find(s => s.competencia === cf.competencia)?.evidencias || "Escriba la lista de evidencias propuestas..."}
+                            placeholder={currentSuggestedFunctionals.find(s => s.competencia === cf.competencia)?.evidencias || "Escriba la lista de evidencias propuestas..."}
                           />
                         </div>
                       </div>
@@ -5216,10 +5403,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                             setActiveBehaviorSelectorIndex(0);
                             setIsBehaviorSelectorForAdmin(false);
                             
-                            const matchKey = Object.keys(OFFICIAL_EVALUATION_CRITERIA).find(
+                            const matchKey = Object.keys(currentOfficialCriteria).find(
                               key => key.toLowerCase().trim() === compName.toLowerCase().trim()
                             ) || compName;
-                            const options = OFFICIAL_EVALUATION_CRITERIA[matchKey] || [];
+                            const options = currentOfficialCriteria[matchKey] || [];
                             const preselected = options.filter(opt => 
                               currentEvidencias.toLowerCase().includes(opt.toLowerCase().trim())
                             );
@@ -5266,10 +5453,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                             setActiveBehaviorSelectorIndex(1);
                             setIsBehaviorSelectorForAdmin(false);
                             
-                            const matchKey = Object.keys(OFFICIAL_EVALUATION_CRITERIA).find(
+                            const matchKey = Object.keys(currentOfficialCriteria).find(
                               key => key.toLowerCase().trim() === compName.toLowerCase().trim()
                             ) || compName;
-                            const options = OFFICIAL_EVALUATION_CRITERIA[matchKey] || [];
+                            const options = currentOfficialCriteria[matchKey] || [];
                             const preselected = options.filter(opt => 
                               currentEvidencias.toLowerCase().includes(opt.toLowerCase().trim())
                             );
@@ -5316,10 +5503,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                             setActiveBehaviorSelectorIndex(2);
                             setIsBehaviorSelectorForAdmin(false);
                             
-                            const matchKey = Object.keys(OFFICIAL_EVALUATION_CRITERIA).find(
+                            const matchKey = Object.keys(currentOfficialCriteria).find(
                               key => key.toLowerCase().trim() === compName.toLowerCase().trim()
                             ) || compName;
-                            const options = OFFICIAL_EVALUATION_CRITERIA[matchKey] || [];
+                            const options = currentOfficialCriteria[matchKey] || [];
                             const preselected = options.filter(opt => 
                               currentEvidencias.toLowerCase().includes(opt.toLowerCase().trim())
                             );
@@ -5697,7 +5884,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     
                     const functionalCompSel = evalS1?.compromisosFuncionales && evalS1.compromisosFuncionales.length > 0
                       ? evalS1.compromisosFuncionales
-                      : SUGGESTED_FUNCTIONALS;
+                      : currentSuggestedFunctionals;
                       
                     const behavioralCompSel = evalS1?.compromisosComportamentales && evalS1.compromisosComportamentales.length > 0
                       ? evalS1.compromisosComportamentales
@@ -6200,10 +6387,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                                 const currentCriteria = cf.criterios || '';
                                 setActiveCriteriaSelectorIndex(idx);
                                 setIsCriteriaSelectorForAdmin(true);
-                                const matchKey = Object.keys(OFFICIAL_EVALUATION_CRITERIA).find(
+                                const matchKey = Object.keys(currentOfficialCriteria).find(
                                   key => key.toLowerCase().trim() === cf.competencia.toLowerCase().trim()
                                 ) || cf.competencia;
-                                const options = OFFICIAL_EVALUATION_CRITERIA[matchKey] || [];
+                                const options = currentOfficialCriteria[matchKey] || [];
                                 const preselected = options.filter(opt => 
                                   currentCriteria.toLowerCase().includes(opt.toLowerCase().trim()) ||
                                   currentCriteria.toLowerCase().includes(opt.toLowerCase().replace(/\./g, '').trim())
@@ -6262,10 +6449,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                               setActiveBehaviorSelectorIndex(idx);
                               setIsBehaviorSelectorForAdmin(true);
                               
-                              const matchKey = Object.keys(OFFICIAL_EVALUATION_CRITERIA).find(
+                              const matchKey = Object.keys(currentOfficialCriteria).find(
                                 key => key.toLowerCase().trim() === cc.competencia.toLowerCase().trim()
                               ) || cc.competencia;
-                              const options = OFFICIAL_EVALUATION_CRITERIA[matchKey] || [];
+                              const options = currentOfficialCriteria[matchKey] || [];
                               const preselected = options.filter(opt => 
                                 currentCriteria.toLowerCase().includes(opt.toLowerCase().trim())
                               );
@@ -6375,10 +6562,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
             ? selectedEvalForInspection?.compromisosFuncionales[activeCriteriaSelectorIndex]
             : activeEvaluacion?.compromisosFuncionales[activeCriteriaSelectorIndex];
           if (!cf) return null;
-          const matchKey = Object.keys(OFFICIAL_EVALUATION_CRITERIA).find(
+          const matchKey = Object.keys(currentOfficialCriteria).find(
             key => key.toLowerCase().trim() === cf.competencia.toLowerCase().trim()
           ) || cf.competencia;
-          const options = OFFICIAL_EVALUATION_CRITERIA[matchKey] || [];
+          const options = currentOfficialCriteria[matchKey] || [];
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" id="criteria-selector-modal">
@@ -6499,10 +6686,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
           const compName = compObj?.competencia || fallbackCompName;
           if (!compName) return null;
 
-          const matchKey = Object.keys(OFFICIAL_EVALUATION_CRITERIA).find(
+          const matchKey = Object.keys(currentOfficialCriteria).find(
             key => key.toLowerCase().trim() === compName.toLowerCase().trim()
           ) || compName;
-          const options = OFFICIAL_EVALUATION_CRITERIA[matchKey] || [];
+          const options = currentOfficialCriteria[matchKey] || [];
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" id="behavior-criteria-selector-modal">
