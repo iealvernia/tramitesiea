@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+�import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, Briefcase, Calendar, Clock, FileSpreadsheet, Search, Plus, Trash2, 
@@ -35,7 +35,7 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [teacherCedulaLogin, setTeacherCedulaLogin] = useState('');
   
-  const [appBrandName, setAppBrandName] = useState('App Gestión');
+  const [appBrandName, setAppBrandName] = useState('App Gesti�n');
   const [instBrandName, setInstBrandName] = useState('IE ALVERNIA');
   const [sidebarLogoBase64, setSidebarLogoBase64] = useState<string>('./logo.png');
 
@@ -78,7 +78,7 @@ export default function App() {
       
       setUserSession(data.session);
     } catch (err: any) {
-      setLoginError(err.message || 'Error de conexión');
+      setLoginError(err.message || 'Error de conexi�n');
     }
     setLoginLoading(false);
   };
@@ -89,7 +89,7 @@ export default function App() {
     setLoginLoading(true);
     
     if (!teacherCedulaLogin.trim()) {
-      setLoginError('Ingrese su número de cédula');
+      setLoginError('Ingrese su n�mero de c�dula');
       setLoginLoading(false);
       return;
     }
@@ -128,7 +128,7 @@ export default function App() {
       if (!empData.success) {
         console.warn('Error fetching employees from PostgreSQL:', empData.error);
         setDbSyncStatus('error');
-        setDbError(empData.error || empData.message || 'Error de conexiÃ³n');
+        setDbError(empData.error || empData.message || 'Error de conexión');
         return;
       }
 
@@ -138,7 +138,7 @@ export default function App() {
       if (!novData.success) {
         console.warn('Error fetching novedades from PostgreSQL:', novData.error);
         setDbSyncStatus('error');
-        setDbError(novData.error || novData.message || 'Error de conexiÃ³n');
+        setDbError(novData.error || novData.message || 'Error de conexión');
         return;
       }
 
@@ -241,7 +241,7 @@ export default function App() {
   // Handle Connecting and Initial Syncing
   const handleConnectAndSyncGoogle = async () => {
     setIsSyncingGoogle(true);
-    setGoogleStatusMsg('Iniciando sesiÃ³n...');
+    setGoogleStatusMsg('Iniciando sesión...');
     try {
       const result = await signInWithGoogleWorkspace();
       if (result) {
@@ -261,7 +261,7 @@ export default function App() {
           localStorage.setItem('alvernia_spreadsheet_id', existingId);
           localStorage.setItem('alvernia_spreadsheet_url', checkedUrl);
         } else {
-          setGoogleStatusMsg('Creando hoja de cÃ¡lculo en Drive...');
+          setGoogleStatusMsg('Creando hoja de cálculo en Drive...');
           const newSheet = await createGoogleSheetDatabase(result.token, 'I.E. Alvernia - Registro de Permisos');
           checkedId = newSheet.id;
           checkedUrl = newSheet.url;
@@ -274,12 +274,12 @@ export default function App() {
         setGoogleStatusMsg('Enviando datos de permisos...');
         await syncNovedadesToSheet(result.token, checkedId!, novedades, employeesDict);
         setGoogleStatusMsg(null);
-        showToast('Â¡Conectado y sincronizado exitosamente con Google Sheets!');
+        showToast('¡Conectado y sincronizado exitosamente con Google Sheets!');
       }
     } catch (error: any) {
       console.error(error);
       setGoogleStatusMsg(null);
-      alert(`Error al establecer sincronizaciÃ³n con Google Workspace: ${error.message || error}`);
+      alert(`Error al establecer sincronización con Google Workspace: ${error.message || error}`);
     } finally {
       setIsSyncingGoogle(false);
     }
@@ -294,7 +294,7 @@ export default function App() {
     setGoogleStatusMsg('Actualizando datos...');
     try {
       await syncNovedadesToSheet(googleToken, spreadsheetId, novedades, employeesDict);
-      showToast('Â¡Base de Datos de Google Sheets actualizada con Ã©xito!');
+      showToast('¡Base de Datos de Google Sheets actualizada con éxito!');
     } catch (error: any) {
       console.error(error);
       if (error.status === 401 || (error.message && error.message.includes('401'))) {
@@ -305,10 +305,10 @@ export default function App() {
             setGoogleUser(result.user);
             setGoogleToken(result.token);
             await syncNovedadesToSheet(result.token, spreadsheetId, novedades, employeesDict);
-            showToast('Â¡Base de Datos de Google Sheets actualizada con Ã©xito!');
+            showToast('¡Base de Datos de Google Sheets actualizada con éxito!');
           }
         } catch (e: any) {
-          alert('Tu sesiÃ³n de Google expirÃ³. Por favor haz clic en conectar de nuevo.');
+          alert('Tu sesión de Google expiró. Por favor haz clic en conectar de nuevo.');
           setGoogleUser(null);
           setGoogleToken(null);
         }
@@ -413,7 +413,7 @@ export default function App() {
 
   // --- Novedad Registration Form State ---
   const [selectedEmpIdForNovedad, setSelectedEmpIdForNovedad] = useState('');
-  const [newNovClase, setNewNovClase] = useState<string>(CLASES_NOVEDADES_OPCIONES[15]); // default Permiso de AdopciÃ³n or similar
+  const [newNovClase, setNewNovClase] = useState<string>(CLASES_NOVEDADES_OPCIONES[15]); // default Permiso de Adopción or similar
   const [newNovSede, setNewNovSede] = useState<string>(SEDES_OPCIONES[0]);
   
   // Start and End datetime inputs (requires datetime-local format)
@@ -461,7 +461,7 @@ export default function App() {
     try {
       const targetsToClean = Object.entries(cleanOptions).filter(([_, v]) => v).map(([k]) => k);
       if (targetsToClean.length === 0) {
-        showToast("âš ï¸ No has seleccionado ningÃºn mÃ³dulo para limpiar.");
+        showToast("�a�️ No has seleccionado ningún módulo para limpiar.");
         return;
       }
 
@@ -490,13 +490,13 @@ export default function App() {
       }
 
       setConfirmResetOpen(false);
-      showToast("Â¡Datos seleccionados borrados correctamente! La base de datos ha sido limpiada.");
+      showToast("¡Datos seleccionados borrados correctamente! La base de datos ha sido limpiada.");
       
       setTimeout(() => window.location.reload(), 1500);
 
     } catch (e: any) {
       console.error('Could not clear DB records:', e);
-      showToast("âŒ Hubo un error limpiando la base de datos.");
+      showToast("�R Hubo un error limpiando la base de datos.");
     }
   };
 
@@ -579,7 +579,7 @@ export default function App() {
 
     if (updatedEmp) {
       const targetEmp = updatedEmp as Employee;
-      showToast(`Empleado ${targetEmp.nombre} ahora estÃ¡ ${targetEmp.activo ? 'ACTIVO' : 'INHABILITADO'}`);
+      showToast(`Empleado ${targetEmp.nombre} ahora está ${targetEmp.activo ? 'ACTIVO' : 'INHABILITADO'}`);
       try {
         const res = await fetch('/api/employees/bulk', {
           method: 'POST',
@@ -606,13 +606,13 @@ export default function App() {
       return;
     }
     if (!newEmpCedula.trim() || isNaN(Number(newEmpCedula))) {
-      setNewEmpError('Por favor ingrese un nÃºmero de cÃ©dula vÃ¡lido.');
+      setNewEmpError('Por favor ingrese un número de cédula válido.');
       return;
     }
 
     // Check duplication ONLY if we are NOT editing
     if (!isEditingEmployee && employees.some(emp => emp.cedula === newEmpCedula)) {
-      setNewEmpError(`Ya existe un empleado registrado con la cÃ©dula ${newEmpCedula}.`);
+      setNewEmpError(`Ya existe un empleado registrado con la cédula ${newEmpCedula}.`);
       return;
     }
 
@@ -670,7 +670,7 @@ export default function App() {
         setdbError(e.message || 'Error de red al guardar docente');
       }
       
-      showToast(`Se registrÃ³ correctamente al empleado ${newEmployee.nombre}`);
+      showToast(`Se registró correctamente al empleado ${newEmployee.nombre}`);
     }
     
     // Reset Form
@@ -744,7 +744,7 @@ export default function App() {
     const endMs = new Date(newNovFechaFin).getTime();
 
     if (startMs >= endMs) {
-      setNewNovError('La fecha y hora de inicio de la novedad debe ser anterior a la fecha y hora de finalizaciÃ³n.');
+      setNewNovError('La fecha y hora de inicio de la novedad debe ser anterior a la fecha y hora de finalización.');
       return;
     }
 
@@ -967,7 +967,7 @@ export default function App() {
               )}
 
               <div>
-                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">NÃºmero de Documento (CÃ©dula)</label>
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">Número de Documento (Cédula)</label>
                 <input
                   type="text"
                   required
@@ -997,7 +997,7 @@ export default function App() {
                   }}
                   className="text-[11px] text-blue-400 hover:text-blue-300 hover:underline transition-all font-semibold cursor-pointer"
                 >
-                  Â¿Es Administrador del sistema? Ingrese aquÃ­
+                  ¿Es Administrador del sistema? Ingrese aquí
                 </button>
               </div>
             </form>
@@ -1012,7 +1012,7 @@ export default function App() {
               )}
 
               <div>
-                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">Correo ElectrÃ³nico</label>
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">Correo Electrónico</label>
                 <input
                   type="email"
                   required
@@ -1025,11 +1025,11 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">ContraseÃ±a</label>
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">Contraseña</label>
                 <input
                   type="password"
                   required
-                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                  placeholder="⬢⬢⬢⬢⬢⬢⬢⬢"
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl font-medium text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
@@ -1051,7 +1051,7 @@ export default function App() {
                 ) : (
                   <>
                     <Lock className="w-4 h-4 shrink-0" />
-                    <span>Ingresar al Sistema de GestiÃ³n</span>
+                    <span>Ingresar al Sistema de Gestión</span>
                   </>
                 )}
               </button>
@@ -1065,7 +1065,7 @@ export default function App() {
                   }}
                   className="text-[11px] text-blue-400 hover:text-blue-300 hover:underline transition-all font-semibold cursor-pointer"
                 >
-                  â† Volver al Portal de Docentes 1278
+                  � � Volver al Portal de Docentes 1278
                 </button>
               </div>
             </form>
@@ -1074,7 +1074,7 @@ export default function App() {
           {/* Prompt footer info */}
           <div className="text-center mt-6 border-t border-slate-800 pt-4">
             <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-              Este es un sistema institucional privado. El acceso estÃ¡ restringido Ãºnicamente a usuarios autorizados de la InstituciÃ³n Educativa Alvernia.
+              Este es un sistema institucional privado. El acceso está restringido únicamente a usuarios autorizados de la Institución Educativa Alvernia.
             </p>
           </div>
         </motion.div>
@@ -1132,7 +1132,7 @@ export default function App() {
             <>
               <div className="pt-2 pb-2">
                 <p className="px-4 text-[9px] font-extrabold text-slate-500 uppercase tracking-widest leading-none">
-                  Mi EvaluaciÃ³n
+                  Mi Evaluación
                 </p>
               </div>
 
@@ -1164,7 +1164,7 @@ export default function App() {
                 id="tab-btn-mensajes-sidebar-teacher"
               >
                 <AlertCircle className={`w-4 h-4 shrink-0 ${teacherMessagesStatus === 'red' ? 'text-rose-500 animate-pulse' : teacherMessagesStatus === 'green' ? 'text-emerald-500' : 'text-indigo-400'}`} />
-                RetroalimentaciÃ³n
+                Retroalimentación
               </button>
             </>
           ) : (
@@ -1206,7 +1206,7 @@ export default function App() {
                 id="tab-btn-computo-sidebar"
               >
                 <Clock className="w-4 h-4 shrink-0" />
-                CÃ³mputo Absoluto
+                Cómputo Absoluto
               </button>
 
               <button
@@ -1236,7 +1236,7 @@ export default function App() {
                 id="tab-btn-matriculas-sidebar"
               >
                 <School className="w-4 h-4 shrink-0" />
-                Control de Matrículas
+                Control de Matr�culas
               </button>
               
               <button
@@ -1280,7 +1280,7 @@ export default function App() {
 
               <div className="pt-4 pb-2 border-t border-slate-700/50 mt-4">
                 <p className="px-4 text-[9px] font-extrabold text-slate-500 uppercase tracking-widest leading-none">
-                  Gestión del Sistema
+                  Gesti�n del Sistema
                 </p>
               </div>
               
@@ -1294,7 +1294,7 @@ export default function App() {
                 id="tab-btn-configuracion-sidebar"
               >
                 <Settings className="w-4 h-4 shrink-0" />
-                Configuración General
+                Configuraci�n General
               </button>
             </>
           )}
@@ -1306,7 +1306,7 @@ export default function App() {
             className="w-full flex items-center gap-3 px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors font-semibold text-xs uppercase tracking-wider"
           >
             <LogOut className="w-4 h-4" />
-            Cerrar Sesión
+            Cerrar Sesi�n
           </button>
         </div>
       </aside>
@@ -1320,13 +1320,13 @@ export default function App() {
               {activeTab === "novedades" && "Agenda de Permisos"}
               {activeTab === "empleados" && "Personal y Carga (Excel)"}
               {activeTab === "reportes" && "Reportes Generales"}
-              {activeTab === "computo" && "Cómputo Absoluto"}
-              {activeTab === "matriculas" && "Control de Matrículas"}
+              {activeTab === "computo" && "C�mputo Absoluto"}
+              {activeTab === "matriculas" && "Control de Matr�culas"}
               {activeTab === "certificados" && "Certificados Generales"}
               {activeTab === "certificadosPama" && "Certificados PAMA"}
               {activeTab === "constancias" && "Constancias de Estudio"}
-              {activeTab === "evaluacionDocente" && "Evaluación Docente"}
-              {activeTab === "configuracion" && "Configuración del Sistema"}
+              {activeTab === "evaluacionDocente" && "Evaluaci�n Docente"}
+              {activeTab === "configuracion" && "Configuraci�n del Sistema"}
             </h2>
           </div>
         </header>
@@ -1335,9 +1335,9 @@ export default function App() {
           {activeTab === "novedades" && (
             <div className="bg-amber-50 border border-amber-200 p-8 rounded-xl text-center">
               <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-amber-700 mb-2">Módulo en Mantenimiento</h3>
+              <h3 className="text-xl font-bold text-amber-700 mb-2">M�dulo en Mantenimiento</h3>
               <p className="text-amber-600">
-                La interfaz de Agenda de Permisos (Novedades) está temporalmente deshabilitada debido a la pérdida de código en App.tsx.
+                La interfaz de Agenda de Permisos (Novedades) est� temporalmente deshabilitada debido a la p�rdida de c�digo en App.tsx.
                 Por favor, restaure App.tsx usando el historial local de su editor (Ctrl + Z) para recuperar esta funcionalidad.
               </p>
             </div>
@@ -1346,9 +1346,9 @@ export default function App() {
           {activeTab === "empleados" && (
             <div className="bg-amber-50 border border-amber-200 p-8 rounded-xl text-center">
               <Users className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-amber-700 mb-2">Módulo en Mantenimiento</h3>
+              <h3 className="text-xl font-bold text-amber-700 mb-2">M�dulo en Mantenimiento</h3>
               <p className="text-amber-600">
-                La interfaz de Personal y Carga está temporalmente deshabilitada debido a la pérdida de código en App.tsx.
+                La interfaz de Personal y Carga est� temporalmente deshabilitada debido a la p�rdida de c�digo en App.tsx.
                 Por favor, restaure App.tsx usando el historial local de su editor (Ctrl + Z) para recuperar esta funcionalidad.
               </p>
             </div>

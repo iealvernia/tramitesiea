@@ -413,23 +413,23 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       [{ v: "Concepto", s: headerBlueStyle }] 
     ];
     
-    const mesesConIngresos = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada').map(t => t.mes))).sort((a,b) => mesesOrder.indexOf(a) - mesesOrder.indexOf(b));
+    const mesesConIngresos = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada').map(t => t.mes))).sort((a,b) => mesesOrder.indexOf(a as string) - mesesOrder.indexOf(b as string)) as string[];
     
     mesesConIngresos.forEach(m => wsIngresosData[7].push({ v: m.slice(0,3).toLowerCase(), s: headerBlueStyle }));
     wsIngresosData[7].push({ v: "Total INGRESOS", s: headerBlueStyle });
 
-    const catsIngreso = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada').map(t => t.categoria)));
+    const catsIngreso = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada').map(t => t.categoria))) as string[];
     
     wsIngresosData.push([{ v: "- INGRESOS", s: headerLightBlueStyle }]); 
     
     let totalGeneralIngresos = 0;
-    const totalesPorMesIng = Object.fromEntries(mesesConIngresos.map(m => [m, 0]));
+    const totalesPorMesIng = Object.fromEntries(mesesConIngresos.map((m: string) => [m, 0]));
 
-    catsIngreso.forEach(cat => {
+    catsIngreso.forEach((cat: string) => {
       const row: any[] = [{ v: `    ${cat}`, s: {} }];
       let totalCat = 0;
-      mesesConIngresos.forEach(m => {
-        const sum = transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada' && t.categoria === cat && t.mes === m).reduce((acc, curr) => acc + Number(curr.valor), 0);
+      mesesConIngresos.forEach((m: string) => {
+        const sum = transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada' && t.categoria === cat && t.mes === m).reduce((acc: number, curr: any) => acc + Number(curr.valor), 0);
         row.push({ v: sum || '-', s: moneyStyle });
         totalCat += sum;
         totalesPorMesIng[m] += sum;
@@ -439,8 +439,8 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       wsIngresosData.push(row);
     });
 
-    const totalRowIng = [{ v: "Total INGRESOS", s: { font: { bold: true } } }];
-    mesesConIngresos.forEach(m => {
+    const totalRowIng: any[] = [{ v: "Total INGRESOS", s: { font: { bold: true } } }];
+    mesesConIngresos.forEach((m: string) => {
       totalRowIng.push({ v: totalesPorMesIng[m], s: moneyBoldStyle });
     });
     totalRowIng.push({ v: totalGeneralIngresos, s: moneyBoldStyle });
@@ -470,23 +470,23 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       [{ v: "Concepto", s: headerBlueStyle }] 
     ];
     
-    const mesesConGastos = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida').map(t => t.mes))).sort((a,b) => mesesOrder.indexOf(a) - mesesOrder.indexOf(b));
+    const mesesConGastos = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida').map(t => t.mes))).sort((a,b) => mesesOrder.indexOf(a as string) - mesesOrder.indexOf(b as string)) as string[];
     
     mesesConGastos.forEach(m => wsGastosData[7].push({ v: m.slice(0,3).toLowerCase(), s: headerBlueStyle }));
     wsGastosData[7].push({ v: "Total GASTOS", s: headerBlueStyle });
 
-    const catsGasto = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida').map(t => t.categoria)));
+    const catsGasto = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida').map(t => t.categoria))) as string[];
     
     wsGastosData.push([{ v: "- GASTOS", s: headerLightBlueStyle }]); 
     
     let totalGeneralGastos = 0;
-    const totalesPorMesGas = Object.fromEntries(mesesConGastos.map(m => [m, 0]));
+    const totalesPorMesGas = Object.fromEntries(mesesConGastos.map((m: string) => [m, 0]));
 
-    catsGasto.forEach(cat => {
+    catsGasto.forEach((cat: string) => {
       const row: any[] = [{ v: `    ${cat}`, s: {} }];
       let totalCat = 0;
-      mesesConGastos.forEach(m => {
-        const sum = transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida' && t.categoria === cat && t.mes === m).reduce((acc, curr) => acc + Number(curr.valor), 0);
+      mesesConGastos.forEach((m: string) => {
+        const sum = transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida' && t.categoria === cat && t.mes === m).reduce((acc: number, curr: any) => acc + Number(curr.valor), 0);
         row.push({ v: sum || '-', s: moneyStyle });
         totalCat += sum;
         totalesPorMesGas[m] += sum;
@@ -496,8 +496,8 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       wsGastosData.push(row);
     });
 
-    const totalRowGas = [{ v: "Total GASTOS", s: { font: { bold: true } } }];
-    mesesConGastos.forEach(m => {
+    const totalRowGas: any[] = [{ v: "Total GASTOS", s: { font: { bold: true } } }];
+    mesesConGastos.forEach((m: string) => {
       totalRowGas.push({ v: totalesPorMesGas[m], s: moneyBoldStyle });
     });
     totalRowGas.push({ v: totalGeneralGastos, s: moneyBoldStyle });

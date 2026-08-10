@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // Initialize the S3 client configured for Cloudflare R2
 const s3Client = new S3Client({
@@ -11,12 +12,18 @@ const s3Client = new S3Client({
 });
 
 /**
- * Uploads a file to Cloudflare R2.
+ * Uploads a file to Cloudflare R2 using a presigned URL and XMLHttpRequest
+ * to support progress tracking without encountering CORS ETag issues.
  * @param file The File object from the browser.
  * @param prefix Optional string prefix (e.g. 'anexo2' or 'signatures') to organize files.
+ * @param onProgress Optional callback for upload progress (0 to 100).
  * @returns The public URL of the uploaded file.
  */
-export const uploadFileToR2 = async (file: File, prefix: string = 'uploads'): Promise<string> => {
+export const uploadFileToR2 = async (
+  file: File, 
+  prefix: string = 'uploads',
+  onProgress?: (percentage: number) => void
+): Promise<string> => {
   if (!import.meta.env.VITE_R2_BUCKET_NAME) {
     throw new Error('R2_BUCKET_NAME is not defined in environment variables.');
   }
@@ -28,19 +35,42 @@ export const uploadFileToR2 = async (file: File, prefix: string = 'uploads'): Pr
   const objectKey = `${prefix}/${timestamp}-${randomStr}-${cleanName}`;
 
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-
+    // 1. Create a presigned URL for the PUT operation
     const command = new PutObjectCommand({
       Bucket: import.meta.env.VITE_R2_BUCKET_NAME,
       Key: objectKey,
-      Body: uint8Array,
       ContentType: file.type,
-      // Cloudflare R2 doesn't always support ACLs depending on bucket config, 
-      // but usually public buckets rely on bucket policies rather than object ACLs.
     });
+    const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
 
-    await s3Client.send(command);
+    // 2. Upload the file using XMLHttpRequest to track progress
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          const percentage = Math.round((event.loaded / event.total) * 100);
+          onProgress(percentage);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(true);
+        } else {
+          reject(new Error(`Upload failed with status ${xhr.status} ${xhr.statusText}`));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Network error during upload to R2'));
+      };
+
+      xhr.open('PUT', presignedUrl, true);
+      // We must explicitly set the content type to match the presigned URL
+      xhr.setRequestHeader('Content-Type', file.type);
+      xhr.send(file);
+    });
 
     const publicUrl = import.meta.env.VITE_R2_PUBLIC_URL;
     if (!publicUrl) {

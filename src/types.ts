@@ -167,6 +167,7 @@ export interface Caja {
 export interface CajaTransaccion {
   id: string;
   caja_id: string;
+  user_id?: string;
   tipo_operacion: 'Entrada' | 'Salida';
   fecha: string;
   categoria: string;

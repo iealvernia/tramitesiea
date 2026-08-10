@@ -36,7 +36,8 @@ import {
   UserCog,
   Info,
   Archive,
-  RefreshCcw
+  RefreshCcw,
+  UploadCloud
 } from 'lucide-react';
 import { uploadFileToR2 } from '../lib/r2';
 import { DocenteEvaluacion } from '../types';
@@ -546,6 +547,9 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
 
   // Active form state for logged-in teacher
   const [activeEvaluacion, setActiveEvaluacion] = useState<Evaluacion1278 | null>(null);
+
+  const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
+  const [uploadProgressPortfolio, setUploadProgressPortfolio] = useState(0);
 
   const isOrientador = currentTeacher?.cargo?.toLowerCase().includes('orientador');
   const currentSuggestedFunctionals = isOrientador ? SUGGESTED_FUNCTIONALS_ORIENTADOR : SUGGESTED_FUNCTIONALS;
@@ -1847,15 +1851,23 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       return;
     }
 
-    if (file.size > 20 * 1024 * 1024) {
-      alert('El archivo supera el límite de 20MB.');
+    if (file.size > 100 * 1024 * 1024) {
+      alert('El archivo supera el límite de 100MB.');
       return;
     }
 
-    showToast(`Preparando carga de portafolio consolidado a R2...`);
+    setIsUploadingPortfolio(true);
+    setUploadProgressPortfolio(0);
+    // Fake progress interval
+    const progressInterval = setInterval(() => {
+      setUploadProgressPortfolio(prev => Math.min(prev + (Math.random() * 15), 90));
+    }, 400);
 
     try {
       const publicUrl = await uploadFileToR2(file, 'portafolios');
+      
+      clearInterval(progressInterval);
+      setUploadProgressPortfolio(100);
       
       const updatedEval = {
         ...activeEvaluacion,
@@ -1871,8 +1883,13 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       });
 
       syncEvaluacionesToPostgres(updatedEval);
-      showToast('✓ Portafolio de evidencias PDF consolidado y guardado en la nube.');
+      setTimeout(() => {
+        setIsUploadingPortfolio(false);
+        showToast('✓ Portafolio de evidencias PDF consolidado y guardado en la nube.');
+      }, 500);
     } catch (err) {
+      clearInterval(progressInterval);
+      setIsUploadingPortfolio(false);
       console.error('R2 cloud storage failed:', err);
       showToast('Error al subir el archivo a R2.');
     }
@@ -3826,7 +3843,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
               <h5 className="text-xs font-black uppercase tracking-wider text-slate-800">Portafolio Compilado PDF (Firmado)</h5>
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed">
-              Suba aquí su portafolio consolidado final en formato PDF (máximo 20MB) para este período de seguimiento.
+              Suba aquí su portafolio consolidado final en formato PDF (máximo 100MB) para este período de seguimiento.
             </p>
           </div>
 
@@ -7430,6 +7447,38 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                 >
                   Cerrar
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* UPLOAD PROGRESS MODAL */}
+      <AnimatePresence>
+        {isUploadingPortfolio && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center"
+            >
+              <div className="w-16 h-16 rounded-full bg-indigo-50 border-4 border-indigo-100 flex items-center justify-center mb-5 relative">
+                <UploadCloud className="w-8 h-8 text-indigo-500 animate-bounce" />
+                <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
+              </div>
+              <h3 className="text-lg font-black text-slate-800 mb-1">Subiendo Portafolio...</h3>
+              <p className="text-xs text-slate-500 font-medium mb-6">Por favor espere, estamos guardando su archivo en la nube de forma segura.</p>
+              
+              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden relative">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(uploadProgressPortfolio, 100)}%` }}
+                  className="bg-indigo-500 h-full rounded-full"
+                />
+              </div>
+              <div className="mt-2 text-xs font-bold text-indigo-600">
+                {Math.floor(uploadProgressPortfolio)}%
               </div>
             </motion.div>
           </div>
