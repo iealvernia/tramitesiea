@@ -752,7 +752,14 @@ app.post("/api/evaluaciones", async (req, res) => {
     evidenciasAnexo2,
     evidenciasAnexo5,
     portfolioPdfUrl,
-    updatedAt
+    portfolioPdfName,
+    updatedAt,
+    evalFechaInicio,
+    evalFechaFinal,
+    evalDiasIncapacidad,
+    evalDiasValorados,
+    evalCompetenciasMejorar,
+    evalEstrategiasMejorar
   } = req.body;
   if (!id || !cedula) {
     return res.status(400).json({ success: false, error: "id and cedula are required fields." });
@@ -763,8 +770,8 @@ app.post("/api/evaluaciones", async (req, res) => {
         id, cedula, periodo, lugar_concertacion, fecha_concertacion, 
         evaluador_nombre, evaluador_cedula, observaciones_admin, estado, 
         compromisos_funcionales, compromisos_comportamentales, evidencias_anexo2, 
-        evidencias_anexo5, portfolio_pdf_url, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        evidencias_anexo5, portfolio_pdf_url, updated_at, eval_fecha_inicio, eval_fecha_final, eval_dias_incapacidad, eval_dias_valorados, eval_competencias_mejorar, eval_estrategias_mejorar
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       ON CONFLICT (id) DO UPDATE SET
         cedula = EXCLUDED.cedula,
         periodo = EXCLUDED.periodo,
@@ -779,7 +786,13 @@ app.post("/api/evaluaciones", async (req, res) => {
         evidencias_anexo2 = EXCLUDED.evidencias_anexo2,
         evidencias_anexo5 = EXCLUDED.evidencias_anexo5,
         portfolio_pdf_url = EXCLUDED.portfolio_pdf_url,
-        updated_at = EXCLUDED.updated_at
+        updated_at = EXCLUDED.updated_at,
+        eval_fecha_inicio = EXCLUDED.eval_fecha_inicio,
+        eval_fecha_final = EXCLUDED.eval_fecha_final,
+        eval_dias_incapacidad = EXCLUDED.eval_dias_incapacidad,
+        eval_dias_valorados = EXCLUDED.eval_dias_valorados,
+        eval_competencias_mejorar = EXCLUDED.eval_competencias_mejorar,
+        eval_estrategias_mejorar = EXCLUDED.eval_estrategias_mejorar
     `, [
       id,
       cedula,
@@ -795,7 +808,13 @@ app.post("/api/evaluaciones", async (req, res) => {
       JSON.stringify(evidenciasAnexo2 || []),
       JSON.stringify(evidenciasAnexo5 || []),
       portfolioPdfUrl || null,
-      updatedAt || (/* @__PURE__ */ new Date()).toISOString()
+      updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
+      evalFechaInicio || null,
+      evalFechaFinal || null,
+      evalDiasIncapacidad || null,
+      evalDiasValorados || null,
+      evalCompetenciasMejorar || null,
+      evalEstrategiasMejorar || null
     ]);
     res.json({ success: true, message: `Evaluaci\xC3\xB3n guardada exitosamente en PostgreSQL.` });
   } catch (err) {
