@@ -790,6 +790,13 @@ app.get("/api/evaluaciones", async (req, res) => {
       evidenciasAnexo2: typeof row.evidencias_anexo2 === "string" ? JSON.parse(row.evidencias_anexo2) : row.evidencias_anexo2,
       evidenciasAnexo5: typeof row.evidencias_anexo5 === "string" ? JSON.parse(row.evidencias_anexo5) : row.evidencias_anexo5,
       portfolioPdfUrl: row.portfolio_pdf_url,
+      portfolioPdfName: row.portfolio_pdf_name,
+      evalFechaInicio: row.eval_fecha_inicio,
+      evalFechaFinal: row.eval_fecha_final,
+      evalDiasIncapacidad: row.eval_dias_incapacidad,
+      evalDiasValorados: row.eval_dias_valorados,
+      evalCompetenciasMejorar: row.eval_competencias_mejorar,
+      evalEstrategiasMejorar: row.eval_estrategias_mejorar,
       updatedAt: row.updated_at
     }));
 

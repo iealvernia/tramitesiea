@@ -1,0 +1,185 @@
+﻿          {/* PORTAL VIEW 4: ANEXO 6 (EVALUACIÓN FINAL Y PERFIL) */}
+          {selectedPeriod === 1 && portalMode === 'anexo6' && activeEvaluacion && (
+            <div className="space-y-6 animate-fade-in" id="portal-anexo6-view">
+              
+              <div className="bg-blue-50/75 border border-blue-200 p-4 rounded-xl flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-xs font-black text-blue-800 uppercase tracking-wide">Módulo de Evaluación Final: Anexo 6</p>
+                  <p className="text-xs text-blue-950 font-medium leading-relaxed">
+                    A continuación se extraen los datos de competencias y contribuciones consolidados en el Anexo 5. Diligencia los <strong>porcentajes, puntajes y plan de desarrollo</strong> para generar el documento de Excel final con el Perfil de Competencias.
+                  </p>
+                </div>
+              </div>
+
+              {/* Tiempos y Fechas */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-slate-400" />
+                  Fechas y Días Valorados
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Fecha Inicio (Eval)</label>
+                    <input type="date" value={activeEvaluacion.evalFechaInicio || ''} onChange={(e) => setActiveEvaluacion({...activeEvaluacion, evalFechaInicio: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-xs" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Fecha Final (Eval)</label>
+                    <input type="date" value={activeEvaluacion.evalFechaFinal || ''} onChange={(e) => setActiveEvaluacion({...activeEvaluacion, evalFechaFinal: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-xs" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Días Incapacidad</label>
+                    <input type="number" value={activeEvaluacion.evalDiasIncapacidad || ''} onChange={(e) => setActiveEvaluacion({...activeEvaluacion, evalDiasIncapacidad: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg text-xs" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Días Valorados</label>
+                    <input type="number" value={activeEvaluacion.evalDiasValorados || ''} onChange={(e) => setActiveEvaluacion({...activeEvaluacion, evalDiasValorados: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg text-xs bg-slate-50" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabla de Competencias Funcionales */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                  <h3 className="text-sm font-bold text-slate-800">A. Competencias Funcionales (70%)</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase">
+                        <th className="px-4 py-2 w-1/5">Competencia</th>
+                        <th className="px-4 py-2 w-2/5">Contribución (Traída de Anexo 5)</th>
+                        <th className="px-4 py-2 w-1/12 text-center">% Peso</th>
+                        <th className="px-4 py-2 w-1/12 text-center">1ra Val.</th>
+                        <th className="px-4 py-2 w-1/12 text-center">2da Val.</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {activeEvaluacion.compromisosFuncionales.map((comp, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-2 font-semibold text-slate-700">{comp.competencia} <br/><span className="text-[9px] text-slate-400 font-normal">{comp.area}</span></td>
+                          <td className="px-4 py-2 text-slate-600 truncate max-w-[200px]" title={comp.contribucion}>{comp.contribucion || '-'}</td>
+                          <td className="px-4 py-2">
+                            <input type="number" value={comp.porcentaje || ''} onChange={(e) => {
+                              const newArr = [...activeEvaluacion.compromisosFuncionales];
+                              newArr[idx] = { ...newArr[idx], porcentaje: Number(e.target.value) };
+                              setActiveEvaluacion({ ...activeEvaluacion, compromisosFuncionales: newArr });
+                            }} className="w-16 mx-auto px-2 py-1 border rounded text-center text-xs" />
+                          </td>
+                          <td className="px-4 py-2">
+                            <input type="number" step="0.1" max="100" value={comp.puntaje || ''} onChange={(e) => {
+                              const newArr = [...activeEvaluacion.compromisosFuncionales];
+                              newArr[idx] = { ...newArr[idx], puntaje: Number(e.target.value) };
+                              setActiveEvaluacion({ ...activeEvaluacion, compromisosFuncionales: newArr });
+                            }} className="w-16 mx-auto px-2 py-1 border rounded text-center text-xs" />
+                          </td>
+                          <td className="px-4 py-2">
+                            <input type="number" step="0.1" max="100" value={comp.puntaje2 || ''} onChange={(e) => {
+                              const newArr = [...activeEvaluacion.compromisosFuncionales];
+                              newArr[idx] = { ...newArr[idx], puntaje2: Number(e.target.value) };
+                              setActiveEvaluacion({ ...activeEvaluacion, compromisosFuncionales: newArr });
+                            }} className="w-16 mx-auto px-2 py-1 border rounded text-center text-xs" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Tabla de Competencias Comportamentales */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                  <h3 className="text-sm font-bold text-slate-800">B. Competencias Comportamentales (30%)</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase">
+                        <th className="px-4 py-2 w-1/3">Competencia</th>
+                        <th className="px-4 py-2 w-1/3">Evidencias</th>
+                        <th className="px-4 py-2 w-1/6 text-center">1ra Val.</th>
+                        <th className="px-4 py-2 w-1/6 text-center">2da Val.</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {activeEvaluacion.compromisosComportamentales.map((comp, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-2 font-semibold text-slate-700">{comp.competencia || 'Seleccionar...'}</td>
+                          <td className="px-4 py-2 text-slate-600 truncate max-w-[200px]" title={comp.evidencias}>{comp.evidencias || '-'}</td>
+                          <td className="px-4 py-2">
+                            <input type="number" step="0.1" max="100" value={comp.puntaje || ''} onChange={(e) => {
+                              const newArr = [...activeEvaluacion.compromisosComportamentales];
+                              newArr[idx] = { ...newArr[idx], puntaje: Number(e.target.value) };
+                              setActiveEvaluacion({ ...activeEvaluacion, compromisosComportamentales: newArr });
+                            }} className="w-16 mx-auto px-2 py-1 border rounded text-center text-xs" />
+                          </td>
+                          <td className="px-4 py-2">
+                            <input type="number" step="0.1" max="100" value={comp.puntaje2 || ''} onChange={(e) => {
+                              const newArr = [...activeEvaluacion.compromisosComportamentales];
+                              newArr[idx] = { ...newArr[idx], puntaje2: Number(e.target.value) };
+                              setActiveEvaluacion({ ...activeEvaluacion, compromisosComportamentales: newArr });
+                            }} className="w-16 mx-auto px-2 py-1 border rounded text-center text-xs" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Plan de Desarrollo */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-slate-400" />
+                  V. Plan de Desarrollo Personal y Profesional
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Competencias objeto de mejoramiento</label>
+                    <textarea 
+                      rows={3} 
+                      value={activeEvaluacion.evalCompetenciasMejorar || ''} 
+                      onChange={(e) => setActiveEvaluacion({...activeEvaluacion, evalCompetenciasMejorar: e.target.value})} 
+                      className="w-full px-3 py-2 border rounded-lg text-xs resize-none" 
+                      placeholder="Priorizadas con base en puntajes..."
+                    ></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Estrategias y acciones específicas</label>
+                    <textarea 
+                      rows={3} 
+                      value={activeEvaluacion.evalEstrategiasMejorar || ''} 
+                      onChange={(e) => setActiveEvaluacion({...activeEvaluacion, evalEstrategiasMejorar: e.target.value})} 
+                      className="w-full px-3 py-2 border rounded-lg text-xs resize-none" 
+                      placeholder="Estrategias de mejoramiento..."
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-slate-200">
+                <button
+                  onClick={() => saveEvaluacionToPostgres(activeEvaluacion)}
+                  className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                >
+                  <Save className="w-5 h-5" />
+                  Guardar Progreso Anexo 6
+                </button>
+                <button
+                  onClick={() => {
+                    const teacher = docentesEvaluacion.find(d => d.cedula === activeEvaluacion.cedula);
+                    if (teacher) {
+                      generarAnexo6Excel(activeEvaluacion, teacher, institutionName);
+                    }
+                  }}
+                  className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                >
+                  <Download className="w-5 h-5" />
+                  Exportar Anexo 6 (Excel)
+                </button>
+              </div>
+
+            </div>
+          )}

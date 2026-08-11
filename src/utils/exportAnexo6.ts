@@ -12,7 +12,7 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
   const isAprobado = evalDoc.estado === 'Aprobado';
 
   const wb = XLSX.utils.book_new();
-  const COLS = 22;
+  const COLS = 18;
   const wsData: any[][] = [];
   const merges: XLSX.Range[] = [];
   
@@ -48,7 +48,7 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
   // Header
   r = addRow();
   merge(r, 1, r, 17);
-  wsData[r][1] = "REP�aBLICA DE COLOMBIA\nMINISTERIO DE EDUCACI�N NACIONAL\nEVALUACI�N ANUAL DE DESEMPE�O LABORAL\nPROTOCOLO PARA LA EVALUACI�N DE DOCENTES\nANEXO 6";
+  wsData[r][1] = "REPÚBLICA DE COLOMBIA\nMINISTERIO DE EDUCACI�N NACIONAL\nEVALUACI�N ANUAL DE DESEMPE�O LABORAL\nPROTOCOLO PARA LA EVALUACI�N DE DOCENTES\nANEXO 6";
   
   r = addRow(); merge(r, 0, r, 17); emptyRowIndices.push(r);
 
@@ -97,10 +97,10 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
   merge(headFunc1, 2, headFunc2, 7); wsData[headFunc1][2] = "Competencia";
   merge(headFunc1, 8, headFunc2, 12); wsData[headFunc1][8] = "Contribución Individual";
   merge(headFunc1, 13, headFunc1, 17); wsData[headFunc1][13] = "VALORACI�N";
-  wsData[headFunc2][13] = "1ra Val."; wsData[headFunc2][14] = "2da Val."; wsData[headFunc2][15] = "Prom."; merge(headFunc2, 16, headFunc2, 17); wsData[headFunc2][16] = "Pond.";
+  wsData[headFunc2][13] = "Puntaje"; merge(headFunc2, 14, headFunc2, 15); wsData[headFunc2][14] = "Prom."; merge(headFunc2, 16, headFunc2, 17); wsData[headFunc2][16] = "Pond.";
 
   const formatNum = (num: number | undefined) => typeof num === "number" && !isNaN(num) ? num.toFixed(1) : "0.0";
-  const findComp = (name: string) => evalDoc.compromisosFuncionales.find(c => c.competencia.trim().toLowerCase() === name.toLowerCase()) || { contribucion: "", puntaje: 0, puntaje2: 0 };
+  const findComp = (name: string) => evalDoc.compromisosFuncionales.find(c => c.competencia.trim().toLowerCase() === name.toLowerCase()) || { contribucion: "", puntaje: 0, puntaje2: 0, porcentaje: undefined };
   
   const comps = [
     { area: "Académica", name: "Dominio curricular" }, { area: "Académica", name: "Planeación y organización académica" },
@@ -124,17 +124,12 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
     const cf = findComp(c.name);
     const row = addRow();
     merge(row, 0, row, 1); wsData[row][0] = c.area + "\n" + getAreaPorc(c.area);
-    merge(row, 2, row, 7); wsData[row][2] = c.name;
+    merge(row, 2, row, 7); wsData[row][2] = c.name + "\n" + "Peso: " + (cf.porcentaje !== undefined ? cf.porcentaje : (c.area === 'Académica' ? 12.5 : 5.0)) + "%";
     merge(row, 8, row, 12); wsData[row][8] = cf.contribucion || "";
     wsData[row][13] = formatNum(cf.puntaje);
-    wsData[row][14] = formatNum(cf.puntaje2);
     
-    let avgScore = 0;
-    if (cf.puntaje !== undefined && cf.puntaje2 !== undefined && !isNaN(cf.puntaje) && !isNaN(cf.puntaje2)) {
-      avgScore = (Number(cf.puntaje) + Number(cf.puntaje2)) / 2;
-    } else {
-      avgScore = (Number(cf.puntaje) || 0) + (Number(cf.puntaje2) || 0);
-    }
+    
+    let avgScore = Number(cf.puntaje) || 0;
     
     funcSum += avgScore;
     countFunc++;
@@ -148,9 +143,9 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
   merge(startFuncRow + 4, 0, startFuncRow + 5, 1);
   merge(startFuncRow + 6, 0, startFuncRow + 7, 1);
   
-  merge(startFuncRow, 15, startFuncRow + 3, 15); wsData[startFuncRow][15] = formatNum(avgFunc);
-  merge(startFuncRow + 4, 15, startFuncRow + 5, 15); wsData[startFuncRow + 4][15] = formatNum(avgFunc); 
-  merge(startFuncRow + 6, 15, startFuncRow + 7, 15); wsData[startFuncRow + 6][15] = formatNum(avgFunc);
+  merge(startFuncRow, 14, startFuncRow + 3, 15); wsData[startFuncRow][14] = formatNum(avgFunc);
+  merge(startFuncRow + 4, 14, startFuncRow + 5, 15); wsData[startFuncRow + 4][14] = formatNum(avgFunc); 
+  merge(startFuncRow + 6, 14, startFuncRow + 7, 15); wsData[startFuncRow + 6][14] = formatNum(avgFunc);
   
   merge(startFuncRow, 16, startFuncRow + 7, 17); wsData[startFuncRow][16] = formatNum(ponderadoFunc);
 
@@ -166,7 +161,7 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
   const headComp1 = addRow(); const headComp2 = addRow();
   merge(headComp1, 0, headComp2, 12); wsData[headComp1][0] = "Competencia";
   merge(headComp1, 13, headComp1, 17); wsData[headComp1][13] = "VALORACI�N";
-  wsData[headComp2][13] = "1ra Val."; wsData[headComp2][14] = "2da Val."; wsData[headComp2][15] = "Prom."; merge(headComp2, 16, headComp2, 17); wsData[headComp2][16] = "Pond.";
+  wsData[headComp2][13] = "Puntaje"; merge(headComp2, 14, headComp2, 15); wsData[headComp2][14] = "Prom."; merge(headComp2, 16, headComp2, 17); wsData[headComp2][16] = "Pond.";
 
   let compSum = 0;
   let countComp = 0;
@@ -176,24 +171,19 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
   for(let i=0; i<3; i++) {
     const cc = evalDoc.compromisosComportamentales[i] || { competencia: "", puntaje: 0, puntaje2: 0, evidencias: "" } as any;
     const row = addRow();
-    merge(row, 0, row, 7); wsData[row][0] = cc.competencia;
+    merge(row, 0, row, 7); wsData[row][0] = cc.competencia + "\n" + "Peso: 10%";
     merge(row, 8, row, 12); wsData[row][8] = cc.evidencias || "";
     wsData[row][13] = formatNum(cc.puntaje);
-    wsData[row][14] = formatNum(cc.puntaje2);
     
-    let avgScore = 0;
-    if (cc.puntaje !== undefined && cc.puntaje2 !== undefined && !isNaN(cc.puntaje) && !isNaN(cc.puntaje2)) {
-      avgScore = (Number(cc.puntaje) + Number(cc.puntaje2)) / 2;
-    } else {
-      avgScore = (Number(cc.puntaje) || 0) + (Number(cc.puntaje2) || 0);
-    }
+    
+    let avgScore = Number(cc.puntaje) || 0;
     compSum += avgScore;
     if(cc.competencia) countComp++;
   }
   const avgComp = countComp > 0 ? compSum / countComp : (compSum / 3);
   const ponderadoComp = avgComp * 0.30;
   
-  merge(startCompRow, 15, startCompRow + 2, 15); wsData[startCompRow][15] = formatNum(avgComp);
+  merge(startCompRow, 14, startCompRow + 2, 15); wsData[startCompRow][14] = formatNum(avgComp);
   merge(startCompRow, 16, startCompRow + 2, 17); wsData[startCompRow][16] = formatNum(ponderadoComp);
 
   r = addRow(); merge(r, 0, r, 17); emptyRowIndices.push(r);
@@ -280,7 +270,7 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
       if (R === 0) {
           style = { ...NORMAL_CELL, font: { sz: 10, name: 'Arial', bold: false }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
       }
-      else if (C >= 13 && C <= 21 && (R >= startFuncRow && R <= startFuncRow + 7 || R >= startCompRow && R <= startCompRow + 2)) {
+      else if (C >= 13 && C <= 17 && (R >= startFuncRow && R <= startFuncRow + 7 || R >= startCompRow && R <= startCompRow + 2)) {
           style = { ...NORMAL_CELL, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
       }
       else if (valStr === "I. IDENTIFICACI�N" || valStr === "A. EVALUADO" || valStr === "B. EVALUADOR" ||
@@ -304,7 +294,7 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
                valStr.includes("Competencias objeto de mejoramiento") || valStr === "Fecha concertación" || valStr === "Fecha valoración") {
           style = { ...SUB_SECTION };
       }
-      else if (R >= 2 && R <= 9 && (C === 3 || C === 6 || C === 13 || C === 17 || C === 21)) {
+      else if (R >= 2 && R <= 9 && (C === 3 || C === 6 || C === 13 || C === 17 )) {
           if (valStr !== "No." && valStr !== "CC" && valStr !== "Nombres y apellidos") style = { ...YELLOW_CELL };
       }
       else if (R >= 10 && R <= 12 && (C === 2 || C === 6 || C === 12 || C === 19)) {
@@ -322,26 +312,26 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
       }
       
       if (valStr === "# TOTAL DÍAS VALORADOS") style = { ...SUB_SECTION, font: { bold: true, sz: 8 } };
-      if (R === rDiasTotal && C === 19) style = { ...RED_BG, alignment: { horizontal: 'center', vertical: 'center' }, border: BORDER_ALL };
+      
       if (valStr === "70%" || valStr === "30%") style = { ...RED_BG, alignment: { horizontal: 'center', vertical: 'center' }, border: BORDER_ALL };
 
       if (R >= startFuncRow && R < startFuncRow + 8) {
           if (C >= 0 && C <= 1) style = { ...YELLOW_CELL, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
           if (C >= 8 && C <= 12) style = { ...GREEN_CELL };
-          if (C >= 13 && C <= 21) style = { ...BLUE_CELL };
+          if (C >= 13 && C <= 17) style = { ...BLUE_CELL };
       }
       if (R >= startCompRow && R < startCompRow + 3) {
           if (C >= 0 && C <= 12) style = { ...YELLOW_CELL };
-          if (C >= 13 && C <= 21) style = { ...BLUE_CELL };
+          if (C >= 13 && C <= 17) style = { ...BLUE_CELL };
       }
       
       const vStr = String(wsData[R][0]);
       if (vStr.includes("Competencias objeto de mejoramiento")) {
           if (R === r - 3 && C >= 0 && C <= 10) style = { ...GREEN_CELL };
-          if (R === r - 3 && C >= 11 && C <= 21) style = { ...GREEN_CELL };
+          if (R === r - 3 && C >= 11 && C <= 17) style = { ...GREEN_CELL };
       }
       if (R === r - 2 && C >= 0 && C <= 10) style = { ...GREEN_CELL };
-      if (R === r - 2 && C >= 11 && C <= 21) style = { ...GREEN_CELL };
+      if (R === r - 2 && C >= 11 && C <= 17) style = { ...GREEN_CELL };
 
       if (emptyRowIndices.includes(R)) {
           // Just draw left and right outer borders to connect the tables
@@ -349,7 +339,7 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
       }
 
       // Center numbers in columns 14 to 17 (Puntaje, Prom, Pond)
-      if (C >= 13 && C <= 21 && (valStr === "0.0" || (!isNaN(parseFloat(valStr)) && parseFloat(valStr).toString() === valStr || valStr.match(/^\d+\.\d+$/)))) {
+      if (C >= 13 && C <= 17 && (valStr === "0.0" || (!isNaN(parseFloat(valStr)) && parseFloat(valStr).toString() === valStr || valStr.match(/^\d+\.\d+$/)))) {
           style = { ...style, alignment: { ...style.alignment, horizontal: 'center' } };
       }
 

@@ -96,6 +96,7 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
   const [showCalculator, setShowCalculator] = useState(false);
   const [showResumenModal, setShowResumenModal] = useState(false);
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
+  const [editTxId, setEditTxId] = useState<string | null>(null);
   
   const currentYearStr = new Date().getFullYear().toString();
   const defaultMonth = String(new Date().getMonth() + 1).padStart(2, '0');
@@ -317,6 +318,27 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
     return rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   };
 
+  const handleEditTx = (t: CajaTransaccion) => {
+    setEditTxId(t.id);
+    setTipoOp(t.tipo_operacion);
+    setFecha(t.fecha);
+    setValor(formatNumberInput(t.valor.toString()));
+    setCategoria(t.categoria);
+    setTercero(t.tercero || '');
+    setConcepto(t.concepto || '');
+    setShowMovimientoModal(true);
+  };
+
+  const handleOpenNewMovimientoModal = () => {
+    setEditTxId(null);
+    setConcepto('');
+    setValor('');
+    setTercero('');
+    setFecha(new Date().toISOString().split('T')[0]);
+    setTipoOp('Entrada');
+    setShowMovimientoModal(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeCajaId) return alert('Selecciona o crea una caja menor primero.');
@@ -329,7 +351,7 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
     const tAno = String(d.getFullYear());
 
     const newT: CajaTransaccion = {
-      id: generateId(),
+      id: editTxId || generateId(),
       caja_id: activeCajaId,
       user_id: userSession?.user?.email,
       tipo_operacion: tipoOp,
@@ -352,6 +374,7 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       setConcepto('');
       setValor('');
       setTercero('');
+      setEditTxId(null);
       setShowMovimientoModal(false);
     } catch (err) {
       alert('Error guardando la transacción');
@@ -380,16 +403,26 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
 
     const titleStyle = { font: { bold: true, sz: 14 } };
     const subtitleStyle = { font: { bold: true, sz: 12 } };
+    const titleCenteredStyle = { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } };
+    const subtitleCenteredStyle = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
     
     const headerBlueStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "002060" } }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } } };
     
     const headerLightBlueStyle = { font: { bold: true, color: { rgb: "000000" } }, fill: { fgColor: { rgb: "9BC2E6" } }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } } };
     
-    const moneyStyle = { numFmt: '"$"#,##0.00' };
-    const moneyBoldStyle = { numFmt: '"$"#,##0.00', font: { bold: true } };
-    const greenTotalStyle = { numFmt: '"$"#,##0.00', font: { bold: true }, fill: { fgColor: { rgb: "00B050" } } };
+    const moneyFormat = '"$" #,##0;-"$" #,##0;"-";@';
+    const moneyFormatDecimals = '"$" #,##0.00;-"$" #,##0.00;"-";@';
     
-    const noteStyle = { font: { italic: true }, fill: { fgColor: { rgb: "FFFF00" } } };
+    const moneyStyle = { numFmt: moneyFormat };
+    const moneyBoldStyle = { numFmt: moneyFormat, font: { bold: true } };
+    const greenTotalStyle = { numFmt: moneyFormat, font: { bold: true }, fill: { fgColor: { rgb: "00B050" } } };
+    
+    const totalRowLabelStyle = { font: { bold: true }, alignment: { horizontal: 'right' }, fill: { fgColor: { rgb: "D9D9D9" } }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } } };
+    const totalRowIngresosStyle = { numFmt: moneyFormatDecimals, font: { bold: true }, fill: { fgColor: { rgb: "C6EFCE" } }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } } };
+    const totalRowGastosStyle = { numFmt: moneyFormatDecimals, font: { bold: true }, fill: { fgColor: { rgb: "F2DCDB" } }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } } };
+    const totalRowSaldoStyle = { numFmt: moneyFormatDecimals, font: { bold: true }, fill: { fgColor: { rgb: "00B050" } }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } } };
+    
+    const noteStyle = { font: { italic: true }, fill: { fgColor: { rgb: "FFFF00" } }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } } };
 
     const institutionName = "INSTITUCIÓN EDUCATIVA ALVERNIA";
 
@@ -430,20 +463,20 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       let totalCat = 0;
       mesesConIngresos.forEach((m: string) => {
         const sum = transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada' && t.categoria === cat && t.mes === m).reduce((acc: number, curr: any) => acc + Number(curr.valor), 0);
-        row.push({ v: sum || '-', s: moneyStyle });
+        row.push({ v: sum || 0, t: 'n', z: moneyFormat, s: moneyStyle });
         totalCat += sum;
         totalesPorMesIng[m] += sum;
       });
-      row.push({ v: totalCat, s: moneyStyle });
+      row.push({ v: totalCat, t: 'n', z: moneyFormat, s: moneyStyle });
       totalGeneralIngresos += totalCat;
       wsIngresosData.push(row);
     });
 
     const totalRowIng: any[] = [{ v: "Total INGRESOS", s: { font: { bold: true } } }];
     mesesConIngresos.forEach((m: string) => {
-      totalRowIng.push({ v: totalesPorMesIng[m], s: moneyBoldStyle });
+      totalRowIng.push({ v: totalesPorMesIng[m], t: 'n', z: moneyFormat, s: moneyBoldStyle });
     });
-    totalRowIng.push({ v: totalGeneralIngresos, s: moneyBoldStyle });
+    totalRowIng.push({ v: totalGeneralIngresos, t: 'n', z: moneyFormat, s: moneyBoldStyle });
     wsIngresosData.push(totalRowIng);
 
     const wsIngresos = XLSX.utils.aoa_to_sheet(wsIngresosData);
@@ -487,20 +520,20 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       let totalCat = 0;
       mesesConGastos.forEach((m: string) => {
         const sum = transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida' && t.categoria === cat && t.mes === m).reduce((acc: number, curr: any) => acc + Number(curr.valor), 0);
-        row.push({ v: sum || '-', s: moneyStyle });
+        row.push({ v: sum || 0, t: 'n', z: moneyFormat, s: moneyStyle });
         totalCat += sum;
         totalesPorMesGas[m] += sum;
       });
-      row.push({ v: totalCat, s: moneyStyle });
+      row.push({ v: totalCat, t: 'n', z: moneyFormat, s: moneyStyle });
       totalGeneralGastos += totalCat;
       wsGastosData.push(row);
     });
 
     const totalRowGas: any[] = [{ v: "Total GASTOS", s: { font: { bold: true } } }];
     mesesConGastos.forEach((m: string) => {
-      totalRowGas.push({ v: totalesPorMesGas[m], s: moneyBoldStyle });
+      totalRowGas.push({ v: totalesPorMesGas[m], t: 'n', z: moneyFormat, s: moneyBoldStyle });
     });
-    totalRowGas.push({ v: totalGeneralGastos, s: moneyBoldStyle });
+    totalRowGas.push({ v: totalGeneralGastos, t: 'n', z: moneyFormat, s: moneyBoldStyle });
     wsGastosData.push(totalRowGas);
 
     const wsGastos = XLSX.utils.aoa_to_sheet(wsGastosData);
@@ -517,12 +550,12 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
     // HOJA 3: DETALLADO POR MES ADICIONALES
     // ---------------------------------------------------------
     const wsDetalladoData: any[][] = [
-      [{ v: institutionName, s: titleStyle }],
-      [{ v: "REPORTE DE INGRESOS Y GASTOS DETALLADO POR MES ADICIONALES", s: subtitleStyle }],
+      [{ v: institutionName, s: titleCenteredStyle }, {v:''}, {v:''}, {v:''}],
+      [{ v: "REPORTE DE INGRESOS Y GASTOS DETALLADO POR MES ADICIONALES", s: subtitleCenteredStyle }, {v:''}, {v:''}, {v:''}],
       [],
-      [{ v: `AÑO: (Todas)`, s: headerLightBlueStyle }],
-      [{ v: `Fecha: (Todas)`, s: headerLightBlueStyle }],
-      [{ v: "nota: estos datos se borrarán y se actualizarán automáticamente al ingresar su información", s: noteStyle }],
+      [{ v: `AÑO: (Todas)`, s: headerLightBlueStyle }, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}],
+      [{ v: `Fecha: (Todas)`, s: headerLightBlueStyle }, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}],
+      [{ v: "nota: estos datos se borrarán y se actualizarán automáticamente al ingresar su información", s: noteStyle }, {v:'', s: noteStyle}, {v:'', s: noteStyle}, {v:'', s: noteStyle}],
       [
         { v: "DESCRIPCIÓN DE GASTOS REALIZADOS DURANTE EL MES", s: headerBlueStyle },
         { v: "Entrada", s: headerBlueStyle },
@@ -533,9 +566,9 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
 
     wsDetalladoData.push([
       { v: "-INGRESOS", s: headerLightBlueStyle },
-      { v: totalGeneralIngresos, s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } },
-      { v: '-', s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } },
-      { v: totalGeneralIngresos, s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } }
+      { v: totalGeneralIngresos, t: 'n', z: moneyFormat, s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } },
+      { v: 0, t: 'n', z: moneyFormat, s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } },
+      { v: totalGeneralIngresos, t: 'n', z: moneyFormat, s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } }
     ]);
 
     catsIngreso.forEach(cat => {
@@ -544,27 +577,27 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       
       wsDetalladoData.push([
         { v: `  - ${cat}`, s: { font: { bold: true } } },
-        { v: catTotal, s: moneyBoldStyle },
-        { v: '-', s: moneyBoldStyle },
-        { v: catTotal, s: moneyBoldStyle }
+        { v: catTotal, t: 'n', z: moneyFormat, s: moneyBoldStyle },
+        { v: 0, t: 'n', z: moneyFormat, s: moneyBoldStyle },
+        { v: catTotal, t: 'n', z: moneyFormat, s: moneyBoldStyle }
       ]);
       
       transCat.forEach(t => {
         const val = Number(t.valor);
         wsDetalladoData.push([
           { v: `    ${t.concepto}${t.tercero ? ` (Por: ${t.tercero})` : ''}, ${t.fecha.split('-').reverse().join('/')}`, s: {} },
-          { v: val, s: moneyStyle },
-          { v: '-', s: moneyStyle },
-          { v: val, s: moneyStyle }
+          { v: val, t: 'n', z: moneyFormat, s: moneyStyle },
+          { v: 0, t: 'n', z: moneyFormat, s: moneyStyle },
+          { v: val, t: 'n', z: moneyFormat, s: moneyStyle }
         ]);
       });
     });
 
     wsDetalladoData.push([
       { v: "-GASTOS", s: headerLightBlueStyle },
-      { v: '-', s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } },
-      { v: totalGeneralGastos, s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } },
-      { v: -totalGeneralGastos, s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } } 
+      { v: 0, t: 'n', z: moneyFormat, s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } },
+      { v: totalGeneralGastos, t: 'n', z: moneyFormat, s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } },
+      { v: -totalGeneralGastos, t: 'n', z: moneyFormat, s: { ...moneyBoldStyle, fill: { fgColor: { rgb: "9BC2E6" } } } } 
     ]);
 
     catsGasto.forEach(cat => {
@@ -573,37 +606,37 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       
       wsDetalladoData.push([
         { v: `  - ${cat}`, s: { font: { bold: true } } },
-        { v: '-', s: moneyBoldStyle },
-        { v: catTotal, s: moneyBoldStyle },
-        { v: -catTotal, s: moneyBoldStyle }
+        { v: 0, t: 'n', z: moneyFormat, s: moneyBoldStyle },
+        { v: catTotal, t: 'n', z: moneyFormat, s: moneyBoldStyle },
+        { v: -catTotal, t: 'n', z: moneyFormat, s: moneyBoldStyle }
       ]);
       
       transCat.forEach(t => {
         const val = Number(t.valor);
         wsDetalladoData.push([
           { v: `    ${t.concepto}${t.tercero ? ` (Por: ${t.tercero})` : ''}, ${t.fecha.split('-').reverse().join('/')}`, s: {} },
-          { v: '-', s: moneyStyle },
-          { v: val, s: moneyStyle },
-          { v: -val, s: moneyStyle }
+          { v: 0, t: 'n', z: moneyFormat, s: moneyStyle },
+          { v: val, t: 'n', z: moneyFormat, s: moneyStyle },
+          { v: -val, t: 'n', z: moneyFormat, s: moneyStyle }
         ]);
       });
     });
 
     const saldoTotalGeneral = totalGeneralIngresos - totalGeneralGastos;
     wsDetalladoData.push([
-      { v: "        Total general", s: { font: { bold: true } } },
-      { v: totalGeneralIngresos, s: moneyBoldStyle },
-      { v: totalGeneralGastos, s: moneyBoldStyle },
-      { v: saldoTotalGeneral, s: greenTotalStyle }
+      { v: "Total general", s: totalRowLabelStyle },
+      { v: totalGeneralIngresos, t: 'n', z: moneyFormatDecimals, s: totalRowIngresosStyle },
+      { v: totalGeneralGastos, t: 'n', z: moneyFormatDecimals, s: totalRowGastosStyle },
+      { v: saldoTotalGeneral, t: 'n', z: moneyFormatDecimals, s: totalRowSaldoStyle }
     ]);
 
     const wsDetallado = XLSX.utils.aoa_to_sheet(wsDetalladoData);
-    wsDetallado['!cols'] = [{ wch: 80 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+    wsDetallado['!cols'] = [{ wch: 120 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
     wsDetallado['!merges'] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
       { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
-      { s: { r: 3, c: 0 }, e: { r: 3, c: 1 } }, 
-      { s: { r: 4, c: 0 }, e: { r: 4, c: 1 } }, 
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } }, 
+      { s: { r: 4, c: 0 }, e: { r: 4, c: 3 } }, 
       { s: { r: 5, c: 0 }, e: { r: 5, c: 3 } }, 
     ];
     XLSX.utils.book_append_sheet(wb, wsDetallado, "Detallado por Mes");
@@ -663,9 +696,12 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
             <div>
               <h2 className="text-2xl font-bold text-slate-800">Módulo de Caja Menor</h2>
               {activeCajaId ? (
-                <div className="flex items-center gap-3 text-xs md:text-sm font-semibold mt-1">
+                <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm font-semibold mt-1">
                   <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">Ingresos del Año: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(totalesAnuales.ingresos)}</span>
                   <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">Gastos del Año: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(totalesAnuales.gastos)}</span>
+                  <span className={`px-2 py-0.5 rounded-md ${(totalesAnuales.ingresos - totalesAnuales.gastos) >= 0 ? 'text-blue-600 bg-blue-50' : 'text-red-600 bg-red-50'}`}>
+                    Saldo Disponible: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(totalesAnuales.ingresos - totalesAnuales.gastos)}
+                  </span>
                 </div>
               ) : (
                 <p className="text-sm text-slate-500">Seleccione o cree una caja menor</p>
@@ -765,7 +801,7 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
           <div className="space-y-6">
             <div className="flex flex-col md:flex-row items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-slate-200 gap-4">
               <button
-                onClick={() => setShowMovimientoModal(true)}
+                onClick={handleOpenNewMovimientoModal}
                 className="flex items-center justify-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 text-sm font-bold shadow-md shadow-emerald-950/20 transition-all w-full md:w-auto"
               >
                 <Plus className="w-5 h-5" />
@@ -880,13 +916,22 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
                           {formatCurrency(t.saldo_momento)}
                         </td>
                         <td className="p-4 text-center">
-                          <button
-                            onClick={() => handleEliminar(t.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleEditTx(t)}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Editar"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEliminar(t.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1012,12 +1057,12 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       {showMovimientoModal && (
         <div className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-md w-full relative max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setShowMovimientoModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors">
+            <button onClick={() => { setShowMovimientoModal(false); setEditTxId(null); }} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors">
               <X className="w-5 h-5" />
             </button>
             <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-              <Plus className="w-6 h-6 text-emerald-600" />
-              Registrar Movimiento
+              {editTxId ? <Edit2 className="w-6 h-6 text-blue-600" /> : <Plus className="w-6 h-6 text-emerald-600" />}
+              {editTxId ? 'Editar Movimiento' : 'Registrar Movimiento'}
             </h3>
             
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -1118,7 +1163,7 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
                 type="submit"
                 className={`w-full py-4 rounded-xl text-white font-black text-sm transition-all shadow-lg active:scale-[0.98] ${tipoOp === 'Entrada' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/30' : 'bg-gradient-to-r from-red-500 to-rose-500 shadow-red-500/30'}`}
               >
-                REGISTRAR {tipoOp.toUpperCase()}
+                {editTxId ? 'GUARDAR CAMBIOS' : `REGISTRAR ${tipoOp.toUpperCase()}`}
               </button>
             </form>
           </div>
