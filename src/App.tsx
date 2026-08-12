@@ -31,7 +31,9 @@ import {
   Pencil,
   Eye,
   EyeOff,
-  Wallet
+  Wallet,
+  Menu,
+  X
 } from 'lucide-react';
 
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -144,6 +146,7 @@ export default function App() {
   const [isTeacherLogin, setIsTeacherLogin] = useState(false);
   const [teacherCedulaLogin, setTeacherCedulaLogin] = useState('');
   const [userSession, setUserSession] = useState<any>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('alvernia_admin_session');
@@ -1910,14 +1913,18 @@ export default function App() {
       <div className="flex-1 flex flex-col h-full overflow-hidden" id="workspace-main-panel">
         
         {/* Sleek Top Header Banner */}
-        <header className="bg-white border-b border-slate-200 py-4 px-6 md:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0" id="top-header">
-          <div className="flex items-center gap-3">
+        <header className="bg-white border-b border-slate-200 py-3 px-4 md:px-8 flex items-center justify-between gap-2 md:gap-4 shrink-0 w-full" id="top-header">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             {/* Mobile Header elements */}
-            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center lg:hidden shrink-0 shadow-sm">
-              <span className="text-white font-black text-xs">A</span>
-            </div>
-            <div>
-              <h2 className="text-base md:text-lg font-bold text-slate-900" id="header-selected-title">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="w-8 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded flex items-center justify-center lg:hidden shrink-0 shadow-sm transition-colors cursor-pointer"
+              title="Abrir menú"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm md:text-lg font-bold text-slate-900 truncate" id="header-selected-title">
                 {activeTab === 'dashboard' && 'Panel Principal de Control'}
                 {activeTab === 'novedades' && 'Agenda y Registro de Permisos de Empleados'}
                 {activeTab === 'empleados' && 'Planilla General de Talento Humano'}
@@ -1936,7 +1943,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap" id="header-date-and-actions">
+          <div className="flex items-center gap-2 shrink-0" id="header-date-and-actions">
             {/* Quick date display */}
             <div className="border border-slate-200 bg-slate-50 border-r-4 border-r-blue-500 rounded px-3 py-1.5 text-[11px] font-mono font-semibold text-slate-650 flex items-center gap-1.5 h-[34px]">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
@@ -1953,119 +1960,240 @@ export default function App() {
               <LogOut className="w-4 h-4 shrink-0 text-slate-500" />
             </button>
 
-            {/* Mobile Navigation tab options row */}
-            <div className="flex lg:hidden gap-1 flex-wrap" id="mobile-tab-navigation">
-              {hasPermission('NOVEDADES') && (
-                <button
-                  onClick={() => setActiveTab('novedades')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'novedades' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  Agenda
-                </button>
+            {/* Mobile Navigation - Now an Off-Canvas Overlay */}
+            <AnimatePresence>
+              {isMobileMenuOpen && (
+                <>
+                  {/* Backdrop */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] lg:hidden"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  />
+                  {/* Sliding Sidebar */}
+                  <motion.div
+                    initial={{ x: '-100%' }}
+                    animate={{ x: 0 }}
+                    exit={{ x: '-100%' }}
+                    transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+                    className="fixed top-0 left-0 bottom-0 w-72 bg-white z-[110] shadow-2xl flex flex-col lg:hidden"
+                  >
+                    <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center shrink-0 shadow-sm">
+                          <span className="text-white font-black text-xs">IEA</span>
+                        </div>
+                        <span className="font-extrabold text-sm text-slate-800 uppercase tracking-wider">Menú Principal</span>
+                      </div>
+                      <button 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                      {currentTeacher ? (
+                        <>
+                          <div className="pt-2 pb-2">
+                            <p className="px-4 text-[9px] font-extrabold text-slate-500 uppercase tracking-widest leading-none">
+                              Mi Evaluación
+                            </p>
+                          </div>
+                          
+                          <button
+                            onClick={() => { setActiveTab('evaluacionDocente'); setIsMobileMenuOpen(false); }}
+                            className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                              activeTab === 'evaluacionDocente' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <Award className={`w-4 h-4 ${activeTab === 'evaluacionDocente' ? 'text-blue-600' : 'text-slate-400'}`} />
+                            Mis Anexos 2 y 5
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setActiveTab('evaluacionDocente');
+                              setTriggerOpenMessages(prev => prev + 1);
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                              teacherMessagesStatus === 'red'
+                                ? 'bg-rose-50 text-rose-600'
+                                : teacherMessagesStatus === 'green'
+                                ? 'bg-emerald-50 text-emerald-600'
+                                : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <AlertCircle className={`w-4 h-4 shrink-0 ${teacherMessagesStatus === 'red' ? 'text-rose-500 animate-pulse' : teacherMessagesStatus === 'green' ? 'text-emerald-500' : 'text-slate-400'}`} />
+                            Retroalimentación
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
+                            className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                              activeTab === 'dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <Activity className={`w-4 h-4 ${activeTab === 'dashboard' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Panel Principal
+                          </button>
+
+                      {hasPermission('NOVEDADES') && (
+                        <button
+                          onClick={() => { setActiveTab('novedades'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'novedades' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Calendar className={`w-4 h-4 ${activeTab === 'novedades' ? 'text-blue-600' : 'text-slate-400'}`} />
+                          Permisos
+                        </button>
+                      )}
+                      {hasPermission('EMPLEADOS') && (
+                        <button
+                          onClick={() => { setActiveTab('empleados'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'empleados' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Users className={`w-4 h-4 ${activeTab === 'empleados' ? 'text-blue-600' : 'text-slate-400'}`} />
+                          Personal
+                        </button>
+                      )}
+                      {hasPermission('COMPUTO') && (
+                        <button
+                          onClick={() => { setActiveTab('computo'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'computo' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Clock className={`w-4 h-4 ${activeTab === 'computo' ? 'text-blue-600' : 'text-slate-400'}`} />
+                          Cómputo
+                        </button>
+                      )}
+                      {hasPermission('REPORTES') && (
+                        <button
+                          onClick={() => { setActiveTab('reportes'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'reportes' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <FileSpreadsheet className={`w-4 h-4 ${activeTab === 'reportes' ? 'text-blue-600' : 'text-slate-400'}`} />
+                          Reportes
+                        </button>
+                      )}
+                      {hasPermission('CAJAMENOR') && (
+                        <button
+                          onClick={() => { setActiveTab('cajaMenor'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'cajaMenor' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Wallet className={`w-4 h-4 ${activeTab === 'cajaMenor' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          Caja Menor
+                        </button>
+                      )}
+                      {hasPermission('MATRICULAS') && (
+                        <button
+                          onClick={() => { setActiveTab('matriculas'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'matriculas' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <School className={`w-4 h-4 ${activeTab === 'matriculas' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          Matrículas
+                        </button>
+                      )}
+                      {hasPermission('CERTIFICADOS') && (
+                        <button
+                          onClick={() => { setActiveTab('certificados'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'certificados' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <FileCheck className={`w-4 h-4 ${activeTab === 'certificados' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          Certificados
+                        </button>
+                      )}
+                      {hasPermission('CERTIFICADOS_PAMA') && (
+                        <button
+                          onClick={() => { setActiveTab('certificadosPama'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'certificadosPama' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Award className={`w-4 h-4 ${activeTab === 'certificadosPama' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          PAMA
+                        </button>
+                      )}
+                      {hasPermission('CONSTANCIAS') && (
+                        <button
+                          onClick={() => { setActiveTab('constancias'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'constancias' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <FilePlus className={`w-4 h-4 ${activeTab === 'constancias' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          Constancias
+                        </button>
+                      )}
+                      {hasPermission('AGENDA_INSTITUCIONAL') && (
+                        <button
+                          onClick={() => { setActiveTab('agenda'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'agenda' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Calendar className={`w-4 h-4 ${activeTab === 'agenda' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          Agenda Institucional
+                        </button>
+                      )}
+                      {hasPermission('CONSECUTIVOS') && (
+                        <button
+                          onClick={() => { setActiveTab('consecutivos'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'consecutivos' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <FileText className={`w-4 h-4 ${activeTab === 'consecutivos' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          Consecutivos
+                        </button>
+                      )}
+                      {hasPermission('EVALUACION') && (
+                        <button
+                          onClick={() => { setActiveTab('evaluacionDocente'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'evaluacionDocente' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Award className={`w-4 h-4 ${activeTab === 'evaluacionDocente' ? 'text-blue-600' : 'text-slate-400'}`} />
+                          Evaluación
+                        </button>
+                      )}
+                      {hasPermission('CONFIGURACION') && (
+                        <button
+                          onClick={() => { setActiveTab('configuracion'); setIsMobileMenuOpen(false); }}
+                          className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center gap-3 ${
+                            activeTab === 'configuracion' ? 'bg-slate-100 text-slate-800' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Settings className={`w-4 h-4 ${activeTab === 'configuracion' ? 'text-slate-700' : 'text-slate-400'}`} />
+                          Configuración
+                        </button>
+                      )}
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                </>
               )}
-              {hasPermission('EMPLEADOS') && (
-                <button
-                  onClick={() => setActiveTab('empleados')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'empleados' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  Personal
-                </button>
-              )}
-              {hasPermission('COMPUTO') && (
-                <button
-                  onClick={() => setActiveTab('computo')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'computo' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  Cómputo
-                </button>
-              )}
-              {hasPermission('REPORTES') && (
-                <button
-                  onClick={() => setActiveTab('reportes')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'reportes' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  Reportes
-                </button>
-              )}
-              {hasPermission('MATRICULAS') && (
-                <button
-                  onClick={() => setActiveTab('matriculas')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'matriculas' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  Matrículas
-                </button>
-              )}
-              {hasPermission('CERTIFICADOS') && (
-                <button
-                  onClick={() => setActiveTab('certificados')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'certificados' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  Certificados
-                </button>
-              )}
-              {hasPermission('CERTIFICADOS_PAMA') && (
-                <button
-                  onClick={() => setActiveTab('certificadosPama')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'certificadosPama' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  PAMA
-                </button>
-              )}
-              {hasPermission('CONSTANCIAS') && (
-                <button
-                  onClick={() => setActiveTab('constancias')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'constancias' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  Constancias
-                </button>
-              )}
-              {hasPermission('AGENDA_INSTITUCIONAL') && (
-                <button
-                  onClick={() => setActiveTab('agenda')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'agenda' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-indigo-700 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  Agenda
-                </button>
-              )}
-              {hasPermission('CONSECUTIVOS') && (
-                <button
-                  onClick={() => setActiveTab('consecutivos')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'consecutivos' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-emerald-700 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  Consecutivos
-                </button>
-              )}
-              {hasPermission('CONFIGURACION') && (
-                <button
-                  onClick={() => setActiveTab('configuracion')}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg ${
-                    activeTab === 'configuracion' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-650 hover:bg-slate-200'
-                  } cursor-pointer`}
-                >
-                  Configuración
-                </button>
-              )}
-            </div>
+            </AnimatePresence>
           </div>
         </header>
 
@@ -3197,13 +3325,10 @@ export default function App() {
       </div>
 
       {/* Corporate humble Footer */}
-      <footer className="bg-white border-t border-slate-200 py-8 shrink-0" id="crm-footer">
-        <div className="max-w-7xl mx-auto px-4 text-center space-y-2">
-          <p className="text-xs text-slate-450 font-bold uppercase tracking-widest">
-            Institución Educativa Alvernia • Gestión de Talento Humano
-          </p>
-          <p className="text-xs text-slate-400">
-            Desarrollado con altos estándares para el control de asistencia, novedades e incapacidades del personal del colegio Alvernia (Directivos, Docentes, Auxiliares Administrativos, Auxiliares de Servicios Generales y Celadores).
+      <footer className="bg-white border-t border-slate-200 py-4 shrink-0" id="crm-footer">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <p className="text-xs text-slate-400 font-medium">
+            Gestión Administrativa Instituciones Educativas y Desarrollador Julian Saenz
           </p>
         </div>
       </footer>

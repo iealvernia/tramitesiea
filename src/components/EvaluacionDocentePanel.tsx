@@ -1615,6 +1615,57 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
     });
 
     syncEvaluacionesToPostgres(itemToSave);
+
+    // Sync siblings to postgres as well, slightly delayed to avoid blocking UI
+    // Ensure all 4 periods exist or are updated
+    const siblingUpdates: Evaluacion1278[] = [];
+    
+    [1, 2, 3, 4].forEach(p => {
+      if (p === itemToSave.periodo) return;
+      
+      const existingSibling = evaluaciones.find(e => e.cedula === itemToSave.cedula && e.periodo === p);
+      
+      if (existingSibling) {
+        siblingUpdates.push({
+          ...existingSibling,
+          compromisosFuncionales: itemToSave.compromisosFuncionales.map(func => {
+            const oldFunc = existingSibling.compromisosFuncionales.find(f => f.competencia === func.competencia);
+            return { ...func, evaluacion: oldFunc ? oldFunc.evaluacion : 0 };
+          }),
+          compromisosComportamentales: itemToSave.compromisosComportamentales.map(cc => {
+            const oldCc = existingSibling.compromisosComportamentales.find(c => c.competencia === cc.competencia);
+            return { ...cc, puntaje: oldCc ? oldCc.puntaje : 0, puntaje2: oldCc ? oldCc.puntaje2 : 0 };
+          }),
+          evidenciasAnexo2: itemToSave.evidenciasAnexo2,
+          evidenciasAnexo5: itemToSave.evidenciasAnexo5,
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        // Create it if it doesn't exist so it stays perfectly in sync
+        siblingUpdates.push({
+          ...itemToSave,
+          id: `${itemToSave.cedula}__${itemToSave.anio}__${p}`,
+          periodo: p as 1 | 2 | 3 | 4,
+          estado: 'Borrador', // Default state for newly cloned siblings
+          compromisosFuncionales: itemToSave.compromisosFuncionales.map(cf => ({ ...cf, puntaje: 0, puntaje2: 0 })),
+          compromisosComportamentales: itemToSave.compromisosComportamentales.map(cc => ({ ...cc, puntaje: 0, puntaje2: 0 })),
+          updatedAt: new Date().toISOString()
+        });
+      }
+    });
+
+    if (siblingUpdates.length > 0) {
+      setTimeout(() => {
+        siblingUpdates.forEach(sibling => {
+          syncEvaluacionesToPostgres(sibling);
+          setEvaluaciones(prev => {
+            const filtered = prev.filter(e => e.id !== sibling.id);
+            return [sibling, ...filtered];
+          });
+        });
+      }, 500);
+    }
+
     showToast('Seguimiento enviado a revisión y guardado en la base de datos (PostgreSQL).');
   };
 
@@ -5039,7 +5090,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       key={p}
                       onClick={() => !isBlocked && setSelectedPeriod(p as any)}
                       disabled={isBlocked}
-                      title={isBlocked ? `Requiere Seguimiento ${p - 1} Aprobado` : ''}
+                      title={isBlocked ? `Requiere enviar Seguimiento ${p - 1} a revisión` : ''}
                       className={`flex-1 sm:flex-none py-1.5 px-3 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex flex-col items-center justify-center gap-0.5 ${
                         isBlocked
                           ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-transparent opacity-60'
@@ -5761,9 +5812,9 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                           </div>
                         </div>
 
-                        {/* Name / Description & File Support */}
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 pt-2">
-                          <div className="md:col-span-8">
+                        {/* Name / Description */}
+                        <div className="grid grid-cols-1 gap-4 pt-2">
+                          <div className="w-full">
                             <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Nombre / Descripción de la Evidencia</label>
                             <input
                               type="text"
@@ -5772,48 +5823,6 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
                               placeholder="Ej: Informe anual de rendimiento académico de grado 5°"
                             />
-                          </div>
-
-                          {/* Attachment management */}
-                          <div className="md:col-span-4 flex flex-col justify-end">
-                            <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Soporte Adjunto</label>
-                            {row.fileName ? (
-                              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between gap-2 text-xs">
-                                <span className="font-semibold text-slate-700 truncate max-w-[150px]" title={row.fileName}>{row.fileName}</span>
-                                <div className="flex gap-1.5 shrink-0">
-                                  <button
-                                    onClick={() => handleDownloadFile(row)}
-                                    className="p-1 hover:bg-blue-100 text-blue-600 rounded"
-                                    title="Descargar archivo"
-                                  >
-                                    <Download className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      handleEvidenceRowChange(row.id, 'fileName', undefined);
-                                      handleEvidenceRowChange(row.id, 'fileSize', undefined);
-                                      handleEvidenceRowChange(row.id, 'fileType', undefined);
-                                      handleEvidenceRowChange(row.id, 'fileBase64', undefined);
-                                    }}
-                                    className="p-1 hover:bg-red-100 text-red-500 rounded"
-                                    title="Quitar soporte"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <label className="w-full flex items-center justify-center border border-dashed border-slate-300 hover:border-blue-400 py-2 rounded-lg cursor-pointer transition-colors text-[11px] font-bold text-slate-600 gap-1.5 bg-slate-50/50 hover:bg-blue-50/20">
-                                <Upload className="w-3.5 h-3.5 text-slate-500" />
-                                Subir Soporte (PDF/Word)
-                                <input
-                                  type="file"
-                                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.xlsx"
-                                  onChange={(e) => handleFileUpload(e, row.id)}
-                                  className="hidden"
-                                />
-                              </label>
-                            )}
                           </div>
                         </div>
 
@@ -6460,13 +6469,17 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                 
                 {/* Porcentaje summary header card */}
                 {(() => {
-                  const acadSum = selectedEvalForInspection.compromisosFuncionales
+                  const adminDisplayFunc = (Number(selectedEvalForInspection.periodo) > 1) 
+                    ? (evaluaciones.find(e => e.cedula === selectedEvalForInspection.cedula && Number(e.periodo) === 1)?.compromisosFuncionales || selectedEvalForInspection.compromisosFuncionales)
+                    : selectedEvalForInspection.compromisosFuncionales;
+                  
+                  const acadSum = adminDisplayFunc
                     .filter(c => c.area === 'Académica')
                     .reduce((acc, c) => acc + (c.porcentaje ?? 12.5), 0);
-                  const adminSum = selectedEvalForInspection.compromisosFuncionales
+                  const adminSum = adminDisplayFunc
                     .filter(c => c.area === 'Administrativa')
                     .reduce((acc, c) => acc + (c.porcentaje ?? 5.0), 0);
-                  const comunSum = selectedEvalForInspection.compromisosFuncionales
+                  const comunSum = adminDisplayFunc
                     .filter(c => c.area === 'Comunitaria')
                     .reduce((acc, c) => acc + (c.porcentaje ?? 5.0), 0);
                   const totalSum = acadSum + adminSum + comunSum;
@@ -6676,11 +6689,13 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
               </div>
 
               {/* Compromisos Comportamentales in Admin Panel */}
-              <div className="space-y-4">
+              <div className="space-y-4 mt-6">
                 <h4 className="font-extrabold text-slate-700 text-sm border-b border-slate-100 pb-1">Compromisos Comportamentales (Anexo 5)</h4>
-                <div className="space-y-3">
-                  {selectedEvalForInspection.compromisosComportamentales.map((cc, idx) => (
-                    <div key={idx} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-3">
+                <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-1">
+                  {((Number(selectedEvalForInspection.periodo) > 1)
+                    ? (evaluaciones.find(e => e.cedula === selectedEvalForInspection.cedula && Number(e.periodo) === 1)?.compromisosComportamentales || selectedEvalForInspection.compromisosComportamentales)
+                    : selectedEvalForInspection.compromisosComportamentales).map((cc, idx) => (
+                    <div key={idx} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                         <span className="text-xs font-black text-slate-800 uppercase tracking-wide">
                           Competencia Comportamental #{idx + 1}: {cc.competencia}
@@ -6731,27 +6746,17 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                 {selectedEvalForInspection.evidenciasAnexo2.length === 0 ? (
                   <p className="text-xs text-slate-400 italic">No se registran filas de evidencias en esta ficha.</p>
                 ) : (
-                  <div className="space-y-3 max-h-[30vh] overflow-y-auto">
+                  <div className="space-y-3">
                     {selectedEvalForInspection.evidenciasAnexo2.map((row, idx) => (
                       <div key={row.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-4 text-xs">
                         <div className="space-y-1">
                           <p className="font-extrabold text-slate-800">
-                            Folio {row.folio || '-'} &bull; {row.nombre || 'Evidencia sin descripción'}
+                            <span className="font-normal text-slate-500">Folio:</span> {row.folio || '-'} &bull; <span className="font-normal text-slate-500">Nombre / Descripción:</span> {row.nombre || 'Evidencia sin descripción'}
                           </p>
                           <p className="text-[10px] text-slate-500 font-medium">
                             Tipo: {row.tipo === 'D' ? 'Documental' : 'Testimonial'} &bull; Soporta: {row.competenciasSoportadas}
                           </p>
                         </div>
-
-                        {row.fileName && (
-                          <button
-                            onClick={() => handleDownloadFile(row)}
-                            className="py-1.5 px-3 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-xs font-semibold text-blue-600 flex items-center gap-1 shrink-0 transition-colors shadow-sm cursor-pointer"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            Soporte
-                          </button>
-                        )}
                       </div>
                     ))}
                   </div>
