@@ -5828,6 +5828,18 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
 
                       </div>
                     ))}
+                    
+                    {/* Botón inferior para no tener que subir del todo */}
+                    <div className="flex justify-center pt-4 pb-2 border-t border-slate-100 mt-2">
+                      <button
+                        type="button"
+                        onClick={handleAddEvidenceRow}
+                        className="py-2.5 px-5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors border border-blue-200 shadow-sm"
+                      >
+                        <Plus className="w-4 h-4" />
+                        + Agregar Fila Adicional
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
