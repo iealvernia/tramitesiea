@@ -46,6 +46,14 @@ import { generarActaGeneralWord } from '../utils/actaGeneralGenerator';
 import { generarAnexo6Word } from '../utils/exportAnexo6';
 
 // Define structures for Decree 1278 Evaluation
+interface FeedbackEntry {
+  id: string;
+  fecha: string;
+  anexo: string;
+  mensaje: string;
+  autor: string;
+}
+
 export interface EvidenciaFila {
   id: string;
   folio: string;
@@ -134,6 +142,7 @@ export interface Evaluacion1278 {
   evidenciasAnexo5: EvidenciaFila[];
   estado: 'Borrador' | 'Enviado' | 'Aprobado' | 'Corregir';
   observacionesAdmin?: string;
+  historialRetroalimentacion?: FeedbackEntry[];
   updatedAt: string;
   portfolioPdfUrl?: string;
   portfolioPdfName?: string;
@@ -301,7 +310,7 @@ export const SUGGESTED_FUNCTIONALS_ORIENTADOR: { competencia: string; area: 'Aca
   }
 ];
 
-export const OFFICIAL_EVALUATION_CRITERIA_ORIENTADOR: Record<string, string[]> = {
+const OFFICIAL_EVALUATION_CRITERIA_ORIENTADOR: Record<string, string[]> = {
   'Dominio profesional de la orientación escolar': [
     'Demuestra conocimientos actualizados sobre desarrollo humano, orientación escolar, convivencia, inclusión y educación socioemocional.',
     'Aplica fundamentos psicológicos, pedagógicos y sociales en la atención individual y grupal.',
@@ -387,7 +396,7 @@ export const OFFICIAL_EVALUATION_CRITERIA_ORIENTADOR: Record<string, string[]> =
   ]
 };
 
-export const OFFICIAL_EVALUATION_CRITERIA: Record<string, string[]> = {
+const OFFICIAL_EVALUATION_CRITERIA: Record<string, string[]> = {
   'Dominio curricular': [
     'Demuestra conocimientos actualizados y dominio de su disciplina y de las áreas a cargo.',
     'Aplica conocimientos, métodos y herramientas propios de su disciplina en los procesos académicos que dirige.',
@@ -580,20 +589,26 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [selectedEvalForInspection, setSelectedEvalForInspection] = useState<Evaluacion1278 | null>(null);
   const [adminFeedback, setAdminFeedback] = useState('');
+  const [adminFeedbackAnexo2, setAdminFeedbackAnexo2] = useState('');
+  const [adminFeedbackAnexo5, setAdminFeedbackAnexo5] = useState('');
 
   // Sync admin feedback state when opening an evaluation for inspection
   useEffect(() => {
     if (selectedEvalForInspection) {
       setAdminFeedback(selectedEvalForInspection.observacionesAdmin || '');
+      setAdminFeedbackAnexo2('');
+      setAdminFeedbackAnexo5('');
     } else {
       setAdminFeedback('');
+      setAdminFeedbackAnexo2('');
+      setAdminFeedbackAnexo5('');
     }
   }, [selectedEvalForInspection?.id, selectedEvalForInspection?.observacionesAdmin]);
 
   // Notify parent if teacher has messages
   useEffect(() => {
     if (onTeacherMessagesChange && currentTeacher) {
-      const teacherEvals = evaluaciones.filter(e => e.cedula === currentTeacher.cedula && e.observacionesAdmin?.trim());
+      const teacherEvals = evaluaciones.filter(e => e.cedula === currentTeacher.cedula && ((e.historialRetroalimentacion && e.historialRetroalimentacion.length > 0) || e.observacionesAdmin?.trim()));
       if (teacherEvals.length === 0) {
         onTeacherMessagesChange('none');
       } else {
@@ -2001,6 +2016,40 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
   };
 
   // Admin review actions
+  const handleAdminSubmitFeedback = (evalId: string, anexo: 'Anexo 2' | 'Anexo 5' | 'General', message: string) => {
+    if (!message.trim()) return;
+    const itemToUpdate = evaluaciones.find(item => item.id === evalId);
+    if (!itemToUpdate) return;
+
+    const newFeedback: FeedbackEntry = {
+      id: crypto.randomUUID(),
+      fecha: new Date().toISOString(),
+      anexo,
+      mensaje: message,
+      autor: 'Evaluador'
+    };
+
+    const historial = itemToUpdate.historialRetroalimentacion || [];
+    const updatedEval = {
+      ...itemToUpdate,
+      historialRetroalimentacion: [...historial, newFeedback],
+      updatedAt: new Date().toISOString()
+    };
+
+    setEvaluaciones(prev => prev.map(item => item.id === evalId ? updatedEval : item));
+    if (selectedEvalForInspection && selectedEvalForInspection.id === evalId) {
+      setSelectedEvalForInspection(updatedEval);
+    }
+    syncEvaluacionesToPostgres(updatedEval);
+
+    // clear the respective input
+    if (anexo === 'Anexo 2') setAdminFeedbackAnexo2('');
+    else if (anexo === 'Anexo 5') setAdminFeedbackAnexo5('');
+    else setAdminFeedback('');
+    
+    showToast('Retroalimentación guardada y enviada.');
+  };
+
   const handleAdminChangeStatus = (evalId: string, newStatus: 'Aprobado' | 'Corregir') => {
     const itemToUpdate = evaluaciones.find(item => item.id === evalId);
     if (!itemToUpdate) return;
@@ -5046,7 +5095,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
             <div className="flex items-center gap-4">
               {/* Messages Button */}
               {(() => {
-                const hasCorrections = evaluaciones.some(e => e.cedula === currentTeacher.cedula && e.estado === 'Corregir' && e.observacionesAdmin?.trim());
+                const hasCorrections = evaluaciones.some(e => e.cedula === currentTeacher.cedula && e.estado === 'Corregir' && ((e.historialRetroalimentacion && e.historialRetroalimentacion.length > 0) || e.observacionesAdmin?.trim()));
                 const btnColor = hasCorrections 
                   ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200' 
                   : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200';
@@ -6775,24 +6824,122 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                 )}
               </div>
 
-              {/* Feedback and Approval Actions Panel */}
-              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-4">
-                <div className="space-y-1">
-                  <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Planilla de Retroalimentación del Evaluador:</h4>
-                  <p className="text-[11px] text-slate-500">Deje una nota si el docente debe realizar correcciones o para felicitar el envío.</p>
+              {/* Feedback Inputs */}
+              {Number(selectedEvalForInspection.periodo) === 1 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="font-extrabold text-blue-800 text-xs uppercase tracking-wider">Retroalimentación Anexo 2</h4>
+                      <p className="text-[10px] text-blue-600/70">Comentarios específicos para evidencias de Anexo 2.</p>
+                    </div>
+                    <textarea
+                      value={adminFeedbackAnexo2}
+                      onChange={(e) => setAdminFeedbackAnexo2(e.target.value)}
+                      rows={2}
+                      className="w-full p-2 bg-white border border-blue-200 rounded-lg text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+                      placeholder="Escriba sugerencias..."
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => handleAdminSubmitFeedback(selectedEvalForInspection.id, 'Anexo 2', adminFeedbackAnexo2)}
+                        className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
+                      >
+                        Enviar Comentario
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-purple-50/50 border border-purple-100 p-4 rounded-xl space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="font-extrabold text-purple-800 text-xs uppercase tracking-wider">Retroalimentación Anexo 5</h4>
+                      <p className="text-[10px] text-purple-600/70">Comentarios específicos para evidencias de Anexo 5.</p>
+                    </div>
+                    <textarea
+                      value={adminFeedbackAnexo5}
+                      onChange={(e) => setAdminFeedbackAnexo5(e.target.value)}
+                      rows={2}
+                      className="w-full p-2 bg-white border border-purple-200 rounded-lg text-xs focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
+                      placeholder="Escriba sugerencias..."
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => handleAdminSubmitFeedback(selectedEvalForInspection.id, 'Anexo 5', adminFeedbackAnexo5)}
+                        className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
+                      >
+                        Enviar Comentario
+                      </button>
+                    </div>
+                  </div>
                 </div>
+              )}
 
-                <textarea
-                  value={adminFeedback}
-                  onChange={(e) => setAdminFeedback(e.target.value)}
-                  rows={2}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="Escriba aquí los comentarios, ajustes o correcciones necesarias..."
-                />
+              {(Number(selectedEvalForInspection.periodo) === 2 || Number(selectedEvalForInspection.periodo) === 3) && (
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="font-extrabold text-emerald-800 text-xs uppercase tracking-wider">Retroalimentación Portafolio</h4>
+                      <p className="text-[10px] text-emerald-600/70">Comentarios específicos para evidencias de Portafolio.</p>
+                    </div>
+                    <textarea
+                      value={adminFeedback}
+                      onChange={(e) => setAdminFeedback(e.target.value)}
+                      rows={2}
+                      className="w-full p-2 bg-white border border-emerald-200 rounded-lg text-xs focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
+                      placeholder="Escriba sugerencias..."
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => {
+                          handleAdminSubmitFeedback(selectedEvalForInspection.id, 'General', adminFeedback);
+                          setAdminFeedback('');
+                        }}
+                        className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
+                      >
+                        Enviar Comentario
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
+              {Number(selectedEvalForInspection.periodo) === 4 && (
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="font-extrabold text-indigo-800 text-xs uppercase tracking-wider">Retroalimentación Anexo 6</h4>
+                      <p className="text-[10px] text-indigo-600/70">Comentarios específicos para evidencias de Anexo 6.</p>
+                    </div>
+                    <textarea
+                      value={adminFeedback}
+                      onChange={(e) => setAdminFeedback(e.target.value)}
+                      rows={2}
+                      className="w-full p-2 bg-white border border-indigo-200 rounded-lg text-xs focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                      placeholder="Escriba sugerencias..."
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => {
+                          handleAdminSubmitFeedback(selectedEvalForInspection.id, 'General', adminFeedback);
+                          setAdminFeedback('');
+                        }}
+                        className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
+                      >
+                        Enviar Comentario
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Approval Actions Panel */}
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-4 mt-4">
                 <div className="flex items-center justify-end gap-3 pt-2">
                   <button
-                    onClick={() => handleAdminDeleteEvaluation(selectedEvalForInspection.id)}
+                    onClick={() => {
+                      if (window.confirm('¿Está de acuerdo en borrar? Se borrará toda la información agregada por el docente y no se podrá deshacer.')) {
+                        handleAdminDeleteEvaluation(selectedEvalForInspection.id);
+                      }
+                    }}
                     className="py-2 px-3 bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
                     title="Eliminar este envío falso/borrador"
                   >
@@ -6810,7 +6957,9 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     className="py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm shadow-emerald-500/10"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    Aprobar Compromisos
+                    {Number(selectedEvalForInspection.periodo) === 1 ? 'Aprobar Concertación' : 
+                     (Number(selectedEvalForInspection.periodo) === 2 || Number(selectedEvalForInspection.periodo) === 3) ? 'Aprobar Portafolio' : 
+                     'Aprobar Anexo 6'}
                   </button>
                 </div>
               </div>
@@ -7632,7 +7781,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
               {/* Body */}
               <div className="p-6 overflow-y-auto bg-slate-50 flex-1 space-y-4">
                 {(() => {
-                  const teacherEvals = evaluaciones.filter(e => e.cedula === currentTeacher.cedula && e.observacionesAdmin?.trim());
+                  const teacherEvals = evaluaciones.filter(e => e.cedula === currentTeacher.cedula && ((e.historialRetroalimentacion && e.historialRetroalimentacion.length > 0) || e.observacionesAdmin?.trim()));
                   
                   if (teacherEvals.length === 0) {
                     return (
