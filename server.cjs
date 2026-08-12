@@ -89,6 +89,9 @@ async function ensureDbTables() {
     await client.query(`
       ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS evidencias_anexo5 JSONB;
       ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS observaciones_admin TEXT;
+        ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS anexo2_aprobado BOOLEAN DEFAULT FALSE;
+        ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS anexo5_aprobado BOOLEAN DEFAULT FALSE;
+        ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS historial_retroalimentacion JSONB;
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS alvernia_employees (
@@ -711,6 +714,9 @@ app.get("/api/evaluaciones", async (req, res) => {
       evidenciasAnexo5: typeof row.evidencias_anexo5 === "string" ? JSON.parse(row.evidencias_anexo5) : row.evidencias_anexo5,
       portfolioPdfUrl: row.portfolio_pdf_url,
       portfolioPdfName: row.portfolio_pdf_name,
+      anexo2Aprobado: row.anexo2_aprobado,
+      anexo5Aprobado: row.anexo5_aprobado,
+      historialRetroalimentacion: typeof row.historial_retroalimentacion === "string" ? JSON.parse(row.historial_retroalimentacion) : row.historial_retroalimentacion,
       evalFechaInicio: row.eval_fecha_inicio,
       evalFechaFinal: row.eval_fecha_final,
       evalDiasIncapacidad: row.eval_dias_incapacidad,
@@ -760,6 +766,9 @@ app.post("/api/evaluaciones", async (req, res) => {
     evidenciasAnexo5,
     portfolioPdfUrl,
     portfolioPdfName,
+    anexo2Aprobado,
+    anexo5Aprobado,
+    historialRetroalimentacion,
     updatedAt,
     evalFechaInicio,
     evalFechaFinal,
@@ -777,8 +786,8 @@ app.post("/api/evaluaciones", async (req, res) => {
         id, cedula, periodo, lugar_concertacion, fecha_concertacion, 
         evaluador_nombre, evaluador_cedula, observaciones_admin, estado, 
         compromisos_funcionales, compromisos_comportamentales, evidencias_anexo2, 
-        evidencias_anexo5, portfolio_pdf_url, updated_at, eval_fecha_inicio, eval_fecha_final, eval_dias_incapacidad, eval_dias_valorados, eval_competencias_mejorar, eval_estrategias_mejorar
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+        evidencias_anexo5, portfolio_pdf_url, anexo2_aprobado, anexo5_aprobado, historial_retroalimentacion, updated_at, eval_fecha_inicio, eval_fecha_final, eval_dias_incapacidad, eval_dias_valorados, eval_competencias_mejorar, eval_estrategias_mejorar
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
       ON CONFLICT (id) DO UPDATE SET
         cedula = EXCLUDED.cedula,
         periodo = EXCLUDED.periodo,
@@ -793,6 +802,9 @@ app.post("/api/evaluaciones", async (req, res) => {
         evidencias_anexo2 = EXCLUDED.evidencias_anexo2,
         evidencias_anexo5 = EXCLUDED.evidencias_anexo5,
         portfolio_pdf_url = EXCLUDED.portfolio_pdf_url,
+        anexo2_aprobado = EXCLUDED.anexo2_aprobado,
+        anexo5_aprobado = EXCLUDED.anexo5_aprobado,
+        historial_retroalimentacion = EXCLUDED.historial_retroalimentacion,
         updated_at = EXCLUDED.updated_at,
         eval_fecha_inicio = EXCLUDED.eval_fecha_inicio,
         eval_fecha_final = EXCLUDED.eval_fecha_final,
@@ -815,6 +827,9 @@ app.post("/api/evaluaciones", async (req, res) => {
       JSON.stringify(evidenciasAnexo2 || []),
       JSON.stringify(evidenciasAnexo5 || []),
       portfolioPdfUrl || null,
+      anexo2Aprobado || false,
+      anexo5Aprobado || false,
+      JSON.stringify(historialRetroalimentacion || []),
       updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
       evalFechaInicio || null,
       evalFechaFinal || null,
