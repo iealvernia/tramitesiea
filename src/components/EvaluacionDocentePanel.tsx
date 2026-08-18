@@ -887,6 +887,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
   const [profileArea, setProfileArea] = useState('');
   const [profileFirma, setProfileFirma] = useState(''); // base64 string
   const [lastCheckedTeacherId, setLastCheckedTeacherId] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Auto-open profile modal when teacher logs in and has missing fields
   useEffect(() => {
@@ -898,51 +899,63 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                         !currentTeacher.firmaDocente;
 
       if (currentTeacher.id !== lastCheckedTeacherId) {
-        
-        // Use transition to avoid blocking the main thread when updating these states
-        React.startTransition(() => {
-          setProfileLugarExp(currentTeacher.lugarExpedicionCedula || '');
-          setProfileCorreo(currentTeacher.correoElectronico || '');
-          setProfileCelular(currentTeacher.numeroCelular || '');
-          setProfileArea(currentTeacher.areaDesempeno || '');
-          setProfileFirma(currentTeacher.firmaDocente || '');
-        });
-
+        setLastCheckedTeacherId(currentTeacher.id);
         if (isMissing) {
           // Delay opening the modal slightly so the main UI can render smoothly first
           setTimeout(() => {
             setIsProfileModalOpen(true);
           }, 400);
         }
-        setLastCheckedTeacherId(currentTeacher.id);
-      } else if (!isMissing && isProfileModalOpen) {
-        setIsProfileModalOpen(false);
       }
     } else {
       setLastCheckedTeacherId(null);
     }
-  }, [currentTeacher, lastCheckedTeacherId, isProfileModalOpen]);
+  }, [currentTeacher, lastCheckedTeacherId]);
+
+  // Sync state whenever modal opens or currentTeacher changes
+  useEffect(() => {
+    if (isProfileModalOpen && currentTeacher) {
+      React.startTransition(() => {
+        setProfileLugarExp(currentTeacher.lugarExpedicionCedula || '');
+        setProfileCorreo(currentTeacher.correoElectronico || '');
+        setProfileCelular(currentTeacher.numeroCelular || '');
+        setProfileArea(currentTeacher.areaDesempeno || '');
+        setProfileFirma(currentTeacher.firmaDocente || '');
+      });
+    }
+  }, [isProfileModalOpen, currentTeacher]);
 
   const handleSaveProfile = async () => {
     if (!currentTeacher || !setDocentesEvaluacion) return;
+    setIsSavingProfile(true);
 
-    const updatedEmployee: DocenteEvaluacion = {
-      ...currentTeacher,
-      lugarExpedicionCedula: profileLugarExp.trim(),
-      correoElectronico: profileCorreo.trim(),
-      numeroCelular: profileCelular.trim(),
-      areaDesempeno: profileArea.trim(),
-      firmaDocente: profileFirma
-    };
-
-    // 1. Update parent list
-    setDocentesEvaluacion((prev) => prev.map(emp => emp.id === currentTeacher.id ? updatedEmployee : emp));
-    
-    // 2. Also update session state so current view reflects the changes
-    setCurrentTeacher(updatedEmployee);
-
-    // 3. Save to Supabase
     try {
+      let finalFirmaUrl = profileFirma;
+      
+      // If the signature is a base64 string (drawn or uploaded image), upload to Cloudflare R2
+      if (profileFirma.startsWith('data:image')) {
+        const arr = profileFirma.split(',');
+        const mimeMatch = arr[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        const file = new File([u8arr], `firma-${currentTeacher.cedula}.png`, {type:mime});
+        finalFirmaUrl = await uploadFileToR2(file, 'firmas');
+      }
+
+      const updatedEmployee: DocenteEvaluacion = {
+        ...currentTeacher,
+        lugarExpedicionCedula: profileLugarExp.trim(),
+        correoElectronico: profileCorreo.trim(),
+        numeroCelular: profileCelular.trim(),
+        areaDesempeno: profileArea.trim(),
+        firmaDocente: finalFirmaUrl
+      };
+
       const dbEmp: any = {
         id: updatedEmployee.id,
         nombre: updatedEmployee.nombre,
@@ -959,35 +972,66 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
         correo_electronico: updatedEmployee.correoElectronico,
         numero_celular: updatedEmployee.numeroCelular,
         firma_docente: updatedEmployee.firmaDocente
-      };
-
-      const { error } = await supabase.from('docentesEvaluacion').upsert(dbEmp, { onConflict: 'id' });
-      if (error) {
-        if (error.message && (error.message.includes('column') || error.message.includes('relation') || error.code === 'PGS01')) {
-          const stripped = {
-            id: updatedEmployee.id,
-            nombre: updatedEmployee.nombre,
-            cedula: updatedEmployee.cedula,
-            cargo: updatedEmployee.cargo,
-            sede_trabajo: updatedEmployee.sedeTrabajo,
-            dificil_acceso: updatedEmployee.dificilAcceso,
-            horas_aula: updatedEmployee.horasAula,
-            horas_libres: updatedEmployee.horasLibres,
-            area_desempeno: updatedEmployee.areaDesempeno,
-            tipo_nombramiento: updatedEmployee.tipoNombramiento,
-            activo: updatedEmployee.activo
-          };
-          await supabase.from('docentesEvaluacion').upsert(stripped, { onConflict: 'id' });
-        } else {
-          throw error;
+      // 3. Save to PostgreSQL (Aiven) first
+      try {
+        const res = await fetch('/api/docentesEvaluacion/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ docentesEvaluacion: [updatedEmployee] })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to save to PostgreSQL');
         }
+      } catch (dbErr) {
+        console.warn('Error guardando en PostgreSQL:', dbErr);
+        // Podríamos lanzar error si queremos que falle estrictamente sin PostgreSQL, pero 
+        // mantendremos el fallback a Supabase por si acaso.
       }
-    } catch (err: any) {
-      console.warn('Fallo guardado en Supabase (datos locales guardados con éxito):', err);
-    }
 
-    showToast('¡Datos de perfil y firma actualizados con éxito!');
-    setIsProfileModalOpen(false);
+      // 4. Save to Supabase (Backup)
+      try {
+        const { error } = await supabase.from('docentesEvaluacion').upsert(dbEmp, { onConflict: 'id' });
+        if (error) {
+          if (error.message && (error.message.includes('column') || error.message.includes('relation') || error.code === 'PGS01')) {
+            console.warn("Faltan columnas en Supabase, usando payload reducido.");
+            const stripped = {
+              id: updatedEmployee.id,
+              nombre: updatedEmployee.nombre,
+              cedula: updatedEmployee.cedula,
+              cargo: updatedEmployee.cargo,
+              sede_trabajo: updatedEmployee.sedeTrabajo,
+              dificil_acceso: updatedEmployee.dificilAcceso,
+              horas_aula: updatedEmployee.horasAula,
+              horas_libres: updatedEmployee.horasLibres,
+              area_desempeno: updatedEmployee.areaDesempeno,
+              tipo_nombramiento: updatedEmployee.tipoNombramiento,
+              activo: updatedEmployee.activo
+            };
+            await supabase.from('docentesEvaluacion').upsert(stripped, { onConflict: 'id' });
+          } else {
+            throw error;
+          }
+        }
+      } catch (supabaseErr) {
+        console.warn('Error guardando en Supabase (backup):', supabaseErr);
+      }
+
+      // 1. Update parent list
+      setDocentesEvaluacion((prev) => prev.map(emp => emp.id === currentTeacher.id ? updatedEmployee : emp));
+      
+      // 2. Also update session state so current view reflects the changes
+      setCurrentTeacher(updatedEmployee);
+
+      showToast('¡Datos de perfil y firma actualizados con éxito!');
+      setIsProfileModalOpen(false);
+
+    } catch (err: any) {
+      console.error('Fallo guardado en Supabase o subida a R2:', err);
+      alert('Hubo un error guardando el perfil o la firma. Revise la consola para más detalles.');
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   // --- States for editing / deleting teachers by Admin ---
@@ -7534,11 +7578,20 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={!profileLugarExp || !profileCorreo || !profileCelular || !profileArea || !profileFirma}
+                  disabled={!profileLugarExp || !profileCorreo || !profileCelular || !profileArea || !profileFirma || isSavingProfile}
                   className="py-2.5 px-6 bg-blue-600 hover:bg-blue-750 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-white text-xs font-extrabold rounded-xl flex items-center gap-2 shadow-md transition-all cursor-pointer"
                 >
-                  <Save className="w-4 h-4" />
-                  Guardar Perfil
+                  {isSavingProfile ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Guardar Perfil
+                    </>
+                  )}
                 </button>
               </div>
             </form>

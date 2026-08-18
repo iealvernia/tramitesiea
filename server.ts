@@ -125,6 +125,7 @@ async function ensureDbTables() {
       ALTER TABLE alvernia_docentes_evaluacion ADD COLUMN IF NOT EXISTS correo_electronico TEXT;
       ALTER TABLE alvernia_docentes_evaluacion ADD COLUMN IF NOT EXISTS numero_celular TEXT;
       ALTER TABLE alvernia_docentes_evaluacion ADD COLUMN IF NOT EXISTS firma_docente TEXT;
+      ALTER TABLE alvernia_docentes_evaluacion ADD COLUMN IF NOT EXISTS area_desempeno TEXT;
     `);
 
     // Create alvernia_config table for institutional & rector settings
