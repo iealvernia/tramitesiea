@@ -144,6 +144,8 @@ export interface Evaluacion1278 {
   estado: 'Borrador' | 'Enviado' | 'Aprobado' | 'Corregir';
   observacionesAdmin?: string;
   historialRetroalimentacion?: FeedbackEntry[];
+  anexo2Aprobado?: boolean;
+  anexo5Aprobado?: boolean;
   updatedAt: string;
   portfolioPdfUrl?: string;
   portfolioPdfName?: string;
@@ -970,8 +972,9 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
         activo: updatedEmployee.activo,
         lugar_expedicion_cedula: updatedEmployee.lugarExpedicionCedula,
         correo_electronico: updatedEmployee.correoElectronico,
-        numero_celular: updatedEmployee.numeroCelular,
         firma_docente: updatedEmployee.firmaDocente
+      };
+      
       // 3. Save to PostgreSQL (Aiven) first
       try {
         const res = await fetch('/api/docentesEvaluacion/bulk', {
@@ -6953,16 +6956,19 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       placeholder="Escriba sugerencias..."
                     />
                     <div className="flex flex-wrap justify-end gap-2 mt-2">
-                      <button
-                        onClick={() => {
-                          handleAdminSubmitFeedback(selectedEvalForInspection.id, 'Anexo 2', '✅ Anexo 2 revisado y aprobado. No requiere modificaciones.');
-                          setAdminFeedbackAnexo2('');
-                        }}
-                        className="py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1"
-                        title="Enviar mensaje rápido de aprobación para Anexo 2"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Aprobar Anexo 2
-                      </button>
+                      {selectedEvalForInspection.anexo2Aprobado ? (
+                        <span className="py-1.5 px-3 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Anexo 2 Aprobado
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleAdminApproveAnexo(selectedEvalForInspection.id, 'Anexo 2')}
+                          className="py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1"
+                          title="Enviar mensaje rápido de aprobación para Anexo 2"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Aprobar Anexo 2
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           if (adminFeedbackAnexo2.trim()) {
@@ -6971,8 +6977,23 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                           }
                         }}
                         className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
+                        title="Enviar el comentario sin cambiar el estado"
                       >
                         Enviar Comentario
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (adminFeedbackAnexo2.trim()) {
+                            handleAdminRejectAnexo(selectedEvalForInspection.id, 'Anexo 2', adminFeedbackAnexo2);
+                            setAdminFeedbackAnexo2('');
+                          } else {
+                            alert("Por favor escriba un comentario para solicitar correcciones.");
+                          }
+                        }}
+                        className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
+                        title="Enviar el comentario y solicitar correcciones para el Anexo 2"
+                      >
+                        Solicitar Correcciones Anexo 2
                       </button>
                     </div>
                   </div>
@@ -6990,16 +7011,19 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       placeholder="Escriba sugerencias..."
                     />
                     <div className="flex flex-wrap justify-end gap-2 mt-2">
-                      <button
-                        onClick={() => {
-                          handleAdminSubmitFeedback(selectedEvalForInspection.id, 'Anexo 5', '✅ Anexo 5 revisado y aprobado. No requiere modificaciones.');
-                          setAdminFeedbackAnexo5('');
-                        }}
-                        className="py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1"
-                        title="Enviar mensaje rápido de aprobación para Anexo 5"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Aprobar Anexo 5
-                      </button>
+                      {selectedEvalForInspection.anexo5Aprobado ? (
+                        <span className="py-1.5 px-3 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Anexo 5 Aprobado
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleAdminApproveAnexo(selectedEvalForInspection.id, 'Anexo 5')}
+                          className="py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1"
+                          title="Enviar mensaje rápido de aprobación para Anexo 5"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Aprobar Anexo 5
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           if (adminFeedbackAnexo5.trim()) {
@@ -7008,8 +7032,23 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                           }
                         }}
                         className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
+                        title="Enviar el comentario sin cambiar el estado"
                       >
                         Enviar Comentario
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (adminFeedbackAnexo5.trim()) {
+                            handleAdminRejectAnexo(selectedEvalForInspection.id, 'Anexo 5', adminFeedbackAnexo5);
+                            setAdminFeedbackAnexo5('');
+                          } else {
+                            alert("Por favor escriba un comentario para solicitar correcciones.");
+                          }
+                        }}
+                        className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
+                        title="Enviar el comentario y solicitar correcciones para el Anexo 5"
+                      >
+                        Solicitar Correcciones Anexo 5
                       </button>
                     </div>
                   </div>
