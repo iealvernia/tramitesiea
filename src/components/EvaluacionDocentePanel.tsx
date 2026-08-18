@@ -7,8 +7,9 @@ import {
   FileText, 
   Upload, 
   Download, 
-  Plus, 
-  Trash2, 
+  Plus,
+  Minus,
+  Trash2,
   CheckCircle2, 
   AlertCircle, 
   ArrowRight, 
@@ -588,6 +589,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
   // Admin states
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [selectedEvalForInspection, setSelectedEvalForInspection] = useState<Evaluacion1278 | null>(null);
+  const [evalsForReviewSelection, setEvalsForReviewSelection] = useState<Evaluacion1278[] | null>(null);
   const [adminFeedback, setAdminFeedback] = useState('');
   const [adminFeedbackAnexo2, setAdminFeedbackAnexo2] = useState('');
   const [adminFeedbackAnexo5, setAdminFeedbackAnexo5] = useState('');
@@ -1128,6 +1130,8 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       const currentRectorName = localStorage.getItem('iea_rector_name') || rectorName || 'Rector(a) / Coordinador(a) I.E. Alvernia';
       const currentRectorDoc = localStorage.getItem('iea_rector_doc') || rectorDocument || '12345678';
 
+      const isOrientadorTeacher = currentTeacher?.cargo?.toLowerCase().includes('orientador');
+
       if (existing) {
         // Automatically align with current configured parameters and patch missing anio
         let updatedExisting = {
@@ -1156,6 +1160,17 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
           });
         }
 
+        // Migration for Orientador: if the saved evaluation has standard competencies but they are an Orientador
+        if (isOrientadorTeacher && updatedExisting.compromisosFuncionales && updatedExisting.compromisosFuncionales.length > 0 && updatedExisting.compromisosFuncionales.some(cf => cf.competencia === 'Dominio curricular' || cf.competencia === 'Planeación y organización')) {
+          updatedExisting.compromisosFuncionales = updatedExisting.compromisosFuncionales.map((cf, index) => {
+            const suggested = SUGGESTED_FUNCTIONALS_ORIENTADOR[index];
+            if (suggested) {
+              return { ...cf, competencia: suggested.competencia, area: suggested.area };
+            }
+            return cf;
+          });
+        }
+
         setActiveEvaluacion(updatedExisting);
         // Load selected behavior competencies
         if (updatedExisting.compromisosComportamentales.length >= 3) {
@@ -1165,6 +1180,24 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
         }
       } else {
         // Initialize new evaluation record with default suggestions
+        
+        let initialFuncs = evalPeriodo1 ? evalPeriodo1.compromisosFuncionales.map(cf => ({ ...cf, puntaje: 0, puntaje2: 0 })) : (isOrientadorTeacher ? SUGGESTED_FUNCTIONALS_ORIENTADOR : SUGGESTED_FUNCTIONALS).map(f => ({ 
+          ...f,
+          contribucion: '',
+          criterios: '',
+          evidencias: ''
+        }));
+
+        if (isOrientadorTeacher && initialFuncs.some(cf => cf.competencia === 'Dominio curricular' || cf.competencia === 'Planeación y organización')) {
+          initialFuncs = initialFuncs.map((cf, index) => {
+            const suggested = SUGGESTED_FUNCTIONALS_ORIENTADOR[index];
+            if (suggested) {
+              return { ...cf, competencia: suggested.competencia, area: suggested.area };
+            }
+            return cf;
+          });
+        }
+
         const newEval: Evaluacion1278 = {
           id: `${currentTeacher.cedula}__${selectedAnio}__${selectedPeriod}`,
           cedula: currentTeacher.cedula,
@@ -1175,12 +1208,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
           fechaConcertacion: new Date().toISOString().substring(0, 10),
           horaConcertacion: '08:00 AM',
           lugarConcertacion: institutionName,
-          compromisosFuncionales: evalPeriodo1 ? evalPeriodo1.compromisosFuncionales.map(cf => ({ ...cf, puntaje: 0, puntaje2: 0 })) : currentSuggestedFunctionals.map(f => ({ 
-            ...f,
-            contribucion: '',
-            criterios: '',
-            evidencias: ''
-          })),
+          compromisosFuncionales: initialFuncs,
           compromisosComportamentales: evalPeriodo1 ? evalPeriodo1.compromisosComportamentales.map(cc => ({ ...cc, puntaje: 0 })) : [
             { competencia: COMPORTAMENTALES_OPCIONES[0], evidencias: '' },
             { competencia: COMPORTAMENTALES_OPCIONES[1], evidencias: '' },
@@ -5038,11 +5066,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                             {tracked.length > 0 ? (
                               <button
                                 onClick={() => {
-                                  const toReview = tracked.find(e => e.estado === 'Enviado') || 
-                                                   tracked.find(e => e.estado === 'Corregir') ||
-                                                   tracked.find(e => Number(e.periodo) === 1) || 
-                                                   tracked[0];
-                                  setSelectedEvalForInspection(toReview);
+                                  setEvalsForReviewSelection(tracked);
                                 }}
                                 className="py-1.5 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-[11px] transition-colors flex items-center gap-1 cursor-pointer"
                                 title="Revisar Evaluación"
@@ -5450,10 +5474,55 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                           <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest bg-slate-200/50 px-2 py-0.5 rounded">{cf.area}</span>
                           <span className="text-xs font-extrabold text-slate-700">{cf.competencia}</span>
                         </div>
-                        <div>
-                          <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md font-extrabold border border-blue-100">
-                            {cf.porcentaje !== undefined ? cf.porcentaje : (cf.area === 'Académica' ? 12.5 : 5.0)}%
-                          </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider">Ajustar:</span>
+                            <div className="flex items-center gap-0.5">
+                              {[5.0, 10.0, 12.5, 15.0].map((preset) => {
+                                const isCurrent = (cf.porcentaje !== undefined ? cf.porcentaje : (cf.area === 'Académica' ? 12.5 : 5.0)) === preset;
+                                return (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => handleFunctionalChange(index, 'porcentaje', preset)}
+                                    className={`text-[9px] px-1.5 py-0.5 rounded font-black border transition-all ${
+                                      isCurrent
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    {preset}%
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 ml-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = cf.porcentaje !== undefined ? cf.porcentaje : (cf.area === 'Académica' ? 12.5 : 5.0);
+                                handleFunctionalChange(index, 'porcentaje', Math.max(0, current - 0.5));
+                              }}
+                              className="text-slate-400 hover:text-rose-600 bg-white border border-slate-200 hover:border-rose-200 p-0.5 rounded transition-colors"
+                            >
+                              <Minus className="w-2.5 h-2.5" />
+                            </button>
+                            <span className="font-bold text-slate-700 min-w-[32px] text-center bg-white px-1 py-0.5 rounded border border-slate-200">
+                              {(cf.porcentaje !== undefined ? cf.porcentaje : (cf.area === 'Académica' ? 12.5 : 5.0))}%
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = cf.porcentaje !== undefined ? cf.porcentaje : (cf.area === 'Académica' ? 12.5 : 5.0);
+                                handleFunctionalChange(index, 'porcentaje', Math.min(70, current + 0.5));
+                              }}
+                              className="text-slate-400 hover:text-emerald-600 bg-white border border-slate-200 hover:border-emerald-200 p-0.5 rounded transition-colors"
+                            >
+                              <Plus className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
 
@@ -6839,9 +6908,24 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       className="w-full p-2 bg-white border border-blue-200 rounded-lg text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
                       placeholder="Escriba sugerencias..."
                     />
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap justify-end gap-2 mt-2">
                       <button
-                        onClick={() => handleAdminSubmitFeedback(selectedEvalForInspection.id, 'Anexo 2', adminFeedbackAnexo2)}
+                        onClick={() => {
+                          handleAdminSubmitFeedback(selectedEvalForInspection.id, 'Anexo 2', '✅ Anexo 2 revisado y aprobado. No requiere modificaciones.');
+                          setAdminFeedbackAnexo2('');
+                        }}
+                        className="py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1"
+                        title="Enviar mensaje rápido de aprobación para Anexo 2"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Aprobar Anexo 2
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (adminFeedbackAnexo2.trim()) {
+                            handleAdminSubmitFeedback(selectedEvalForInspection.id, 'Anexo 2', adminFeedbackAnexo2);
+                            setAdminFeedbackAnexo2('');
+                          }
+                        }}
                         className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
                       >
                         Enviar Comentario
@@ -6861,9 +6945,24 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       className="w-full p-2 bg-white border border-purple-200 rounded-lg text-xs focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
                       placeholder="Escriba sugerencias..."
                     />
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap justify-end gap-2 mt-2">
                       <button
-                        onClick={() => handleAdminSubmitFeedback(selectedEvalForInspection.id, 'Anexo 5', adminFeedbackAnexo5)}
+                        onClick={() => {
+                          handleAdminSubmitFeedback(selectedEvalForInspection.id, 'Anexo 5', '✅ Anexo 5 revisado y aprobado. No requiere modificaciones.');
+                          setAdminFeedbackAnexo5('');
+                        }}
+                        className="py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1"
+                        title="Enviar mensaje rápido de aprobación para Anexo 5"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Aprobar Anexo 5
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (adminFeedbackAnexo5.trim()) {
+                            handleAdminSubmitFeedback(selectedEvalForInspection.id, 'Anexo 5', adminFeedbackAnexo5);
+                            setAdminFeedbackAnexo5('');
+                          }
+                        }}
                         className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
                       >
                         Enviar Comentario
@@ -7876,6 +7975,57 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
               </div>
               <div className="mt-2 text-xs font-bold text-indigo-600">
                 {Math.floor(uploadProgressPortfolio)}%
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* SELECTION MODAL */}
+      <AnimatePresence>
+        {evalsForReviewSelection && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden flex flex-col"
+            >
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-extrabold text-slate-800 text-sm">Seleccionar Seguimiento</h3>
+                </div>
+                <button
+                  onClick={() => setEvalsForReviewSelection(null)}
+                  className="p-1 hover:bg-slate-200 rounded-lg text-slate-400 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 flex flex-col gap-3">
+                {[...evalsForReviewSelection]
+                  .sort((a, b) => Number(a.periodo) - Number(b.periodo))
+                  .map(ev => (
+                  <button
+                    key={ev.id}
+                    onClick={() => {
+                      setSelectedEvalForInspection(ev);
+                      setEvalsForReviewSelection(null);
+                    }}
+                    className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all text-left group cursor-pointer"
+                  >
+                    <div>
+                      <div className="font-bold text-slate-700 group-hover:text-indigo-700 text-sm">
+                        {Number(ev.periodo) === 1 ? 'S1 - Concertación' : Number(ev.periodo) === 4 ? 'S4 - Anexo 6' : `S${ev.periodo} - Portafolio`}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        Estado: <span className="font-semibold">{ev.estado}</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-500" />
+                  </button>
+                ))}
               </div>
             </motion.div>
           </div>

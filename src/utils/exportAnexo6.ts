@@ -101,8 +101,14 @@ export const generarAnexo6Excel = (evalDoc: Evaluacion1278, teacher: DocenteEval
 
   const formatNum = (num: number | undefined) => typeof num === "number" && !isNaN(num) ? num.toFixed(1) : "0.0";
   const findComp = (name: string) => evalDoc.compromisosFuncionales.find(c => c.competencia.trim().toLowerCase() === name.toLowerCase()) || { contribucion: "", puntaje: 0, puntaje2: 0, porcentaje: undefined };
+  const isOrientador = evalDoc.compromisosFuncionales.some(c => c.competencia.toLowerCase().includes('orientador') || c.competencia.toLowerCase().includes('orientación'));
   
-  const comps = [
+  const comps = isOrientador ? [
+    { area: "Académica", name: "Dominio profesional de la orientación escolar" }, { area: "Académica", name: "Planeación y organización de la orientación escolar" },
+    { area: "Académica", name: "Pedagógica y didáctica" }, { area: "Académica", name: "Evaluación y seguimiento de los procesos de orientación" },
+    { area: "Administrativa", name: "Uso de recursos" }, { area: "Administrativa", name: "Seguimiento de procesos" },
+    { area: "Comunitaria", name: "Comunicación institucional" }, { area: "Comunitaria", name: "Interacción con la comunidad y el entorno" }
+  ] : [
     { area: "Académica", name: "Dominio curricular" }, { area: "Académica", name: "Planeación y organización académica" },
     { area: "Académica", name: "Pedagógica y didáctica" }, { area: "Académica", name: "Evaluación del aprendizajes" },
     { area: "Administrativa", name: "Uso de recursos" }, { area: "Administrativa", name: "Seguimiento de procesos" },
