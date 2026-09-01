@@ -1378,11 +1378,30 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
     }
 
     if (pulled.length > 0) {
-      // Migrate missing anio
-      pulled = pulled.map(p => ({
-        ...p,
-        anio: p.anio || 2026
-      }));
+      // Migrate missing anio and cleanup duplicate default evidences
+      pulled = pulled.map(p => {
+        const cleanEvidencias = (evidencias: EvidenciaFila[] | undefined) => {
+          if (!evidencias) return [];
+          const manualRows = evidencias.filter(e => !e.nombre?.startsWith('Evidencia de soporte -') || e.folio !== 'N/A');
+          const defaultRows = evidencias.filter(e => e.nombre?.startsWith('Evidencia de soporte -') && e.folio === 'N/A');
+          
+          const necessaryDefaultRows = defaultRows.filter(def => {
+            const compName = def.competenciasSoportadas?.toLowerCase().trim() || '';
+            const hasManual = manualRows.some(man => man.competenciasSoportadas?.toLowerCase().includes(compName));
+            // Keep the default row ONLY if there is no manual row supporting this competency
+            return !hasManual;
+          });
+          
+          return [...manualRows, ...necessaryDefaultRows];
+        };
+
+        return {
+          ...p,
+          anio: p.anio || 2026,
+          evidenciasAnexo2: cleanEvidencias(p.evidenciasAnexo2),
+          evidenciasAnexo5: cleanEvidencias(p.evidenciasAnexo5)
+        };
+      });
 
       setEvaluaciones(prev => {
         const merged = [...prev];
@@ -1817,7 +1836,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
 
     const currentRows = activeEvaluacion.evidenciasAnexo2 || [];
     const existingRowIndex = currentRows.findIndex(
-      row => row.competenciasSoportadas?.toLowerCase().trim() === compName?.toLowerCase().trim()
+      row => row.competenciasSoportadas?.toLowerCase().includes(compName?.toLowerCase().trim() || '')
     );
 
     if (existingRowIndex >= 0) return; // Ya existe
@@ -1859,7 +1878,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       const publicUrl = await uploadFileToR2(file, 'soportes-funcionales');
 
       const existingRowIndex = activeEvaluacion.evidenciasAnexo2.findIndex(
-        row => row.competenciasSoportadas.toLowerCase().trim() === compName.toLowerCase().trim()
+        row => row.competenciasSoportadas?.toLowerCase().includes(compName.toLowerCase().trim())
       );
 
       const newRow: EvidenciaFila = {
@@ -6948,6 +6967,19 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       <h4 className="font-extrabold text-blue-800 text-xs uppercase tracking-wider">Retroalimentación Anexo 2</h4>
                       <p className="text-[10px] text-blue-600/70">Comentarios específicos para evidencias de Anexo 2.</p>
                     </div>
+                    {selectedEvalForInspection.historialRetroalimentacion && selectedEvalForInspection.historialRetroalimentacion.filter(h => h.anexo === 'Anexo 2').length > 0 && (
+                      <div className="max-h-32 overflow-y-auto space-y-2 mb-2 bg-white/50 p-2 rounded-lg border border-blue-100">
+                        {selectedEvalForInspection.historialRetroalimentacion.filter(h => h.anexo === 'Anexo 2').map((retro, idx) => (
+                          <div key={idx} className="text-[10px] bg-white p-2 rounded border border-slate-100 shadow-sm">
+                            <div className="flex justify-between items-center text-slate-500 mb-1">
+                              <span className="font-bold">{retro.autor}</span>
+                              <span>{new Date(retro.fecha).toLocaleString()}</span>
+                            </div>
+                            <p className="text-slate-700">{retro.mensaje}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <textarea
                       value={adminFeedbackAnexo2}
                       onChange={(e) => setAdminFeedbackAnexo2(e.target.value)}
@@ -7003,6 +7035,19 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       <h4 className="font-extrabold text-purple-800 text-xs uppercase tracking-wider">Retroalimentación Anexo 5</h4>
                       <p className="text-[10px] text-purple-600/70">Comentarios específicos para evidencias de Anexo 5.</p>
                     </div>
+                    {selectedEvalForInspection.historialRetroalimentacion && selectedEvalForInspection.historialRetroalimentacion.filter(h => h.anexo === 'Anexo 5').length > 0 && (
+                      <div className="max-h-32 overflow-y-auto space-y-2 mb-2 bg-white/50 p-2 rounded-lg border border-purple-100">
+                        {selectedEvalForInspection.historialRetroalimentacion.filter(h => h.anexo === 'Anexo 5').map((retro, idx) => (
+                          <div key={idx} className="text-[10px] bg-white p-2 rounded border border-slate-100 shadow-sm">
+                            <div className="flex justify-between items-center text-slate-500 mb-1">
+                              <span className="font-bold">{retro.autor}</span>
+                              <span>{new Date(retro.fecha).toLocaleString()}</span>
+                            </div>
+                            <p className="text-slate-700">{retro.mensaje}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <textarea
                       value={adminFeedbackAnexo5}
                       onChange={(e) => setAdminFeedbackAnexo5(e.target.value)}
@@ -8016,10 +8061,30 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                             </span>
                           )}
                         </div>
-                        <div className="p-5">
-                          <p className={`text-sm font-semibold whitespace-pre-wrap leading-relaxed ${textClass}`}>
-                            {ev.observacionesAdmin}
-                          </p>
+                        <div className="p-5 space-y-4">
+                          {ev.observacionesAdmin && (
+                            <div className="bg-white/50 p-4 rounded-xl border border-black/5">
+                              <p className="text-xs font-bold uppercase tracking-wider mb-2 opacity-70">Observaciones Generales</p>
+                              <p className={`text-sm font-semibold whitespace-pre-wrap leading-relaxed ${textClass}`}>
+                                {ev.observacionesAdmin}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {ev.historialRetroalimentacion && ev.historialRetroalimentacion.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-xs font-bold uppercase tracking-wider opacity-70 mb-2">Historial de Retroalimentacin de Evidencias</p>
+                              {ev.historialRetroalimentacion.map((retro, idx) => (
+                                <div key={idx} className="bg-white/60 p-3 rounded-lg border border-black/5 flex flex-col gap-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded uppercase">{retro.anexo}</span>
+                                    <span className="text-[10px] text-slate-500">{new Date(retro.fecha).toLocaleString()}</span>
+                                  </div>
+                                  <p className="text-sm font-medium mt-1 text-slate-800">{retro.mensaje}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
