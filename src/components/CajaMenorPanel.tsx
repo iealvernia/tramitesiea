@@ -16,10 +16,26 @@ import {
   X,
   DollarSign,
   BarChart3,
-  Edit2
+  Edit2,
+  CalendarDays,
+  CheckCircle2,
+  Download,
+  Filter,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  Clock
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import { Caja, CajaTransaccion } from '../types';
+
+export interface OpcionesReporteCorte {
+  fechaInicio?: string;
+  fechaFin: string;
+  identificadorCorte?: string;
+  responsable?: string;
+  ano?: string;
+}
 
 interface CajaMenorPanelProps {
   userSession?: any;
@@ -96,13 +112,14 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
   const [showCalculator, setShowCalculator] = useState(false);
   const [showResumenModal, setShowResumenModal] = useState(false);
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
+  const [showReporteCorteModal, setShowReporteCorteModal] = useState(false);
   const [editTxId, setEditTxId] = useState<string | null>(null);
   
   const currentYearStr = new Date().getFullYear().toString();
   const defaultMonth = String(new Date().getMonth() + 1).padStart(2, '0');
   const defaultMonthLabel = MESES[new Date().getMonth()].value;
 
-  const [filtroMes, setFiltroMes] = useState<string>(defaultMonthLabel);
+  const [filtroMes, setFiltroMes] = useState<string>('TODOS');
   const [filtroAno, setFiltroAno] = useState<string>(currentYearStr);
   const [filtroTablaTercero, setFiltroTablaTercero] = useState('');
   const [filtroTablaConcepto, setFiltroTablaConcepto] = useState('');
@@ -209,12 +226,16 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
   const activeCaja = cajas.find(c => c.id === activeCajaId);
   
   const transaccionesActivas = useMemo(() => {
-    return transacciones.filter(t => t.caja_id === activeCajaId && t.mes === filtroMes && t.ano === filtroAno)
-      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    return transacciones.filter(t => {
+      if (t.caja_id !== activeCajaId) return false;
+      if (filtroAno !== 'TODOS' && t.ano !== filtroAno) return false;
+      if (filtroMes !== 'TODOS' && t.mes !== filtroMes) return false;
+      return true;
+    }).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
   }, [transacciones, activeCajaId, filtroMes, filtroAno]);
 
   const totalesAnuales = useMemo(() => {
-    const transAno = transacciones.filter(t => t.caja_id === activeCajaId && t.ano === filtroAno);
+    const transAno = transacciones.filter(t => t.caja_id === activeCajaId && (filtroAno === 'TODOS' ? true : t.ano === filtroAno));
     const ing = transAno.filter(t => t.tipo_operacion === 'Entrada').reduce((a,c) => a + Number(c.valor), 0);
     const gas = transAno.filter(t => t.tipo_operacion === 'Salida').reduce((a,c) => a + Number(c.valor), 0);
     return { ingresos: ing, gastos: gas };
@@ -284,24 +305,49 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
     setEditingCat(null);
   };
 
-  let saldoCorriente = 0;
-  const transaccionesConSaldo = transaccionesActivas.slice().reverse().map(t => {
-    if (t.tipo_operacion === 'Entrada') {
-      saldoCorriente += Number(t.valor);
-    } else {
-      saldoCorriente -= Number(t.valor);
-    }
-    return { ...t, saldo_momento: saldoCorriente };
-  }).reverse();
+  // Calculamos el saldo acumulado cronológico real de todas las transacciones de la caja para el año seleccionado
+  const transaccionesConSaldo = useMemo(() => {
+    const deLaCaja = transacciones
+      .filter(t => t.caja_id === activeCajaId && (filtroAno === 'TODOS' ? true : t.ano === filtroAno))
+      .slice()
+      .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+    let saldoAcum = 0;
+    const conSaldo = deLaCaja.map(t => {
+      if (t.tipo_operacion === 'Entrada') {
+        saldoAcum += Number(t.valor);
+      } else {
+        saldoAcum -= Number(t.valor);
+      }
+      return { ...t, saldo_momento: saldoAcum };
+    });
+
+    return conSaldo.reverse();
+  }, [transacciones, activeCajaId, filtroAno]);
+
+  const hayBusquedaTexto = Boolean(filtroTablaConcepto.trim() || filtroTablaTercero.trim());
 
   const transaccionesTabla = useMemo(() => {
     return transaccionesConSaldo.filter(t => {
-      const matchTercero = filtroTablaTercero ? (t.tercero || '').toLowerCase().includes(filtroTablaTercero.toLowerCase()) : true;
-      const matchConcepto = filtroTablaConcepto ? t.concepto.toLowerCase().includes(filtroTablaConcepto.toLowerCase()) : true;
+      const matchConcepto = filtroTablaConcepto 
+        ? (t.concepto.toLowerCase().includes(filtroTablaConcepto.toLowerCase()) || t.categoria.toLowerCase().includes(filtroTablaConcepto.toLowerCase())) 
+        : true;
+      const matchTercero = filtroTablaTercero 
+        ? (t.tercero || '').toLowerCase().includes(filtroTablaTercero.toLowerCase()) 
+        : true;
+
+      // Si el usuario escribe en el buscador (concepto o tercero), se busca en TODOS los movimientos sin importar el mes ni la fecha seleccionada
+      if (hayBusquedaTexto) {
+        return matchConcepto && matchTercero;
+      }
+
+      // Si no hay búsqueda de texto, se respetan los selectores de mes y fecha
+      const matchMes = filtroMes === 'TODOS' ? true : t.mes === filtroMes;
       const matchFecha = filtroTablaFecha ? t.fecha === filtroTablaFecha : true;
-      return matchTercero && matchConcepto && matchFecha;
+
+      return matchMes && matchFecha;
     });
-  }, [transaccionesConSaldo, filtroTablaTercero, filtroTablaConcepto, filtroTablaFecha]);
+  }, [transaccionesConSaldo, hayBusquedaTexto, filtroTablaConcepto, filtroTablaTercero, filtroTablaFecha, filtroMes]);
 
   const totalIngresos = transaccionesActivas.filter(t => t.tipo_operacion === 'Entrada').reduce((acc, curr) => acc + Number(curr.valor), 0);
   const totalGastos = transaccionesActivas.filter(t => t.tipo_operacion === 'Salida').reduce((acc, curr) => acc + Number(curr.valor), 0);
@@ -396,7 +442,7 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
     return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(val);
   };
 
-  const generateExcel = () => {
+  const generateExcel = (opciones?: OpcionesReporteCorte) => {
     if (!activeCaja) return;
     
     const wb = XLSX.utils.book_new();
@@ -406,8 +452,7 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
     const titleCenteredStyle = { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } };
     const subtitleCenteredStyle = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
     
-    const headerBlueStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "002060" } }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } } };
-    
+    const headerBlueStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "002060" } }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }, alignment: { horizontal: 'center', vertical: 'center' } };
     const headerLightBlueStyle = { font: { bold: true, color: { rgb: "000000" } }, fill: { fgColor: { rgb: "9BC2E6" } }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } } };
     
     const moneyFormat = '"$" #,##0;-"$" #,##0;"-";@';
@@ -426,49 +471,305 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
 
     const institutionName = "INSTITUCIÓN EDUCATIVA ALVERNIA";
 
-    const transaccionesDelAno = transacciones
-      .filter(t => t.caja_id === activeCajaId && t.ano === filtroAno)
+    const fechaInicio = opciones?.fechaInicio || '';
+    const fechaFin = opciones?.fechaFin || '';
+    const identificadorCorte = opciones?.identificadorCorte || '';
+    const responsable = opciones?.responsable || userSession?.user?.name || userSession?.user?.email || 'Encargado(a) de Caja';
+    const anoReporte = opciones?.ano || filtroAno;
+
+    // Saldo anterior a la fecha inicial (restringido estrictamente al año seleccionado)
+    let saldoAnterior = 0;
+    if (fechaInicio) {
+      saldoAnterior = transacciones
+        .filter(t => {
+          if (t.caja_id !== activeCajaId) return false;
+          if (t.ano !== anoReporte) return false;
+          return t.fecha < fechaInicio;
+        })
+        .reduce((acc, curr) => {
+          return curr.tipo_operacion === 'Entrada' ? acc + Number(curr.valor) : acc - Number(curr.valor);
+        }, 0);
+    }
+
+    // Transacciones que corresponden al corte (restringido estrictamente al año seleccionado)
+    const transaccionesCorte = transacciones
+      .filter(t => {
+        if (t.caja_id !== activeCajaId) return false;
+        if (t.ano !== anoReporte) return false;
+        if (fechaInicio && t.fecha < fechaInicio) return false;
+        if (fechaFin && t.fecha > fechaFin) return false;
+        return true;
+      })
       .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 
     const mesesOrder = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
+    const totalGeneralIngresos = transaccionesCorte
+      .filter(t => t.tipo_operacion === 'Entrada')
+      .reduce((acc, curr) => acc + Number(curr.valor), 0);
+
+    const totalGeneralGastos = transaccionesCorte
+      .filter(t => t.tipo_operacion === 'Salida')
+      .reduce((acc, curr) => acc + Number(curr.valor), 0);
+
+    const periodoTexto = fechaInicio 
+      ? `DESDE ${fechaInicio.split('-').reverse().join('/')} HASTA ${fechaFin ? fechaFin.split('-').reverse().join('/') : 'LA FECHA'} (${anoReporte})`
+      : `CORTE HASTA EL ${fechaFin ? fechaFin.split('-').reverse().join('/') : anoReporte} (${anoReporte})`;
+
     // ---------------------------------------------------------
-    // HOJA 1: INGRESOS MENSUALES
+    // HOJA 1: LIBRO AUXILIAR (CORTE DETALLADO)
+    // ---------------------------------------------------------
+    const wsLibroData: any[][] = [
+      [{ v: institutionName, s: titleCenteredStyle }, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}],
+      [{ v: `LIBRO DE CAJA MENOR - INFORME DE CORTE: ${activeCaja.nombre}`, s: subtitleCenteredStyle }, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}],
+      [{ v: `PERÍODO: ${periodoTexto}${identificadorCorte ? ` | ${identificadorCorte}` : ''}`, s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}],
+      [{ v: `Fecha de emisión: ${new Date().toLocaleDateString('es-CO')} | Elaborado por: ${responsable}`, s: { font: { italic: true, sz: 10 }, alignment: { horizontal: 'center' } } }, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}, {v:''}],
+      [],
+      [
+        { v: "N°", s: headerBlueStyle },
+        { v: "Fecha", s: headerBlueStyle },
+        { v: "Operación", s: headerBlueStyle },
+        { v: "Categoría", s: headerBlueStyle },
+        { v: "Concepto / Justificación", s: headerBlueStyle },
+        { v: "Tercero / Beneficiario", s: headerBlueStyle },
+        { v: "Entradas (+)", s: headerBlueStyle },
+        { v: "Salidas (-)", s: headerBlueStyle },
+        { v: "Saldo Acumulado", s: headerBlueStyle }
+      ]
+    ];
+
+    let saldoCorrienteLibro = saldoAnterior;
+    if (fechaInicio) {
+      wsLibroData.push([
+        { v: "-", s: { alignment: { horizontal: 'center' } } },
+        { v: fechaInicio.split('-').reverse().join('/'), s: { alignment: { horizontal: 'center' } } },
+        { v: "Saldo Inicial", s: { font: { bold: true }, alignment: { horizontal: 'center' } } },
+        { v: "Balance Previo", s: {} },
+        { v: "SALDO ANTERIOR AL INICIO DEL CORTE", s: { font: { bold: true } } },
+        { v: "-", s: { alignment: { horizontal: 'center' } } },
+        { v: saldoAnterior > 0 ? saldoAnterior : 0, t: 'n', z: moneyFormat, s: moneyBoldStyle },
+        { v: saldoAnterior < 0 ? Math.abs(saldoAnterior) : 0, t: 'n', z: moneyFormat, s: moneyBoldStyle },
+        { v: saldoAnterior, t: 'n', z: moneyFormat, s: moneyBoldStyle }
+      ]);
+    }
+
+    transaccionesCorte.forEach((t, idx) => {
+      const val = Number(t.valor) || 0;
+      const esEntrada = t.tipo_operacion === 'Entrada';
+      if (esEntrada) {
+        saldoCorrienteLibro += val;
+      } else {
+        saldoCorrienteLibro -= val;
+      }
+      wsLibroData.push([
+        { v: idx + 1, s: { alignment: { horizontal: 'center' } } },
+        { v: t.fecha.split('-').reverse().join('/'), s: { alignment: { horizontal: 'center' } } },
+        { v: t.tipo_operacion, s: { font: { bold: true }, alignment: { horizontal: 'center' } } },
+        { v: t.categoria, s: {} },
+        { v: t.concepto, s: {} },
+        { v: t.tercero || '-', s: {} },
+        { v: esEntrada ? val : 0, t: 'n', z: moneyFormat, s: moneyStyle },
+        { v: !esEntrada ? val : 0, t: 'n', z: moneyFormat, s: moneyStyle },
+        { v: saldoCorrienteLibro, t: 'n', z: moneyFormat, s: moneyStyle }
+      ]);
+    });
+
+    if (transaccionesCorte.length === 0) {
+      wsLibroData.push([
+        { v: "-", s: { alignment: { horizontal: 'center' } } },
+        { v: "-", s: { alignment: { horizontal: 'center' } } },
+        { v: "-", s: { alignment: { horizontal: 'center' } } },
+        { v: "Sin movimientos", s: {} },
+        { v: "No se encontraron movimientos registrados en este período.", s: { font: { italic: true } } },
+        { v: "-", s: {} },
+        { v: 0, t: 'n', z: moneyFormat, s: moneyStyle },
+        { v: 0, t: 'n', z: moneyFormat, s: moneyStyle },
+        { v: saldoCorrienteLibro, t: 'n', z: moneyFormat, s: moneyStyle }
+      ]);
+    }
+
+    wsLibroData.push([
+      { v: "TOTALES DEL CORTE", s: totalRowLabelStyle },
+      { v: "", s: totalRowLabelStyle },
+      { v: "", s: totalRowLabelStyle },
+      { v: "", s: totalRowLabelStyle },
+      { v: "", s: totalRowLabelStyle },
+      { v: "", s: totalRowLabelStyle },
+      { v: totalGeneralIngresos, t: 'n', z: moneyFormatDecimals, s: totalRowIngresosStyle },
+      { v: totalGeneralGastos, t: 'n', z: moneyFormatDecimals, s: totalRowGastosStyle },
+      { v: saldoCorrienteLibro, t: 'n', z: moneyFormatDecimals, s: totalRowSaldoStyle }
+    ]);
+
+    wsLibroData.push([]);
+    wsLibroData.push([
+      { v: `RESUMEN CONTABLE: Saldo Anterior: ${formatCurrency(saldoAnterior)}  |  (+) Total Ingresos: ${formatCurrency(totalGeneralIngresos)}  |  (-) Total Gastos: ${formatCurrency(totalGeneralGastos)}  |  (=) SALDO FINAL AL CORTE: ${formatCurrency(saldoCorrienteLibro)}`, s: noteStyle },
+      { v: '', s: noteStyle }, { v: '', s: noteStyle }, { v: '', s: noteStyle }, { v: '', s: noteStyle }, { v: '', s: noteStyle }, { v: '', s: noteStyle }, { v: '', s: noteStyle }, { v: '', s: noteStyle }
+    ]);
+    wsLibroData.push([]);
+    wsLibroData.push([]);
+    wsLibroData.push([
+      { v: "__________________________________________", s: { alignment: { horizontal: 'center' } } },
+      { v: "" }, { v: "" }, { v: "" },
+      { v: "__________________________________________", s: { alignment: { horizontal: 'center' } } }
+    ]);
+    wsLibroData.push([
+      { v: "RESPONSABLE DE CAJA MENOR", s: { font: { bold: true }, alignment: { horizontal: 'center' } } },
+      { v: "" }, { v: "" }, { v: "" },
+      { v: "RECTOR(A) / ORDENADOR DEL GASTO", s: { font: { bold: true }, alignment: { horizontal: 'center' } } }
+    ]);
+    wsLibroData.push([
+      { v: responsable, s: { alignment: { horizontal: 'center' } } },
+      { v: "" }, { v: "" }, { v: "" },
+      { v: institutionName, s: { alignment: { horizontal: 'center' } } }
+    ]);
+
+    const wsLibro = XLSX.utils.aoa_to_sheet(wsLibroData);
+    wsLibro['!cols'] = [
+      { wch: 6 },  // N°
+      { wch: 14 }, // Fecha
+      { wch: 14 }, // Tipo
+      { wch: 25 }, // Categoría
+      { wch: 45 }, // Concepto
+      { wch: 28 }, // Tercero
+      { wch: 18 }, // Ingresos
+      { wch: 18 }, // Gastos
+      { wch: 20 }  // Saldo
+    ];
+    const totalRowsLibro = wsLibroData.length;
+    wsLibro['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 8 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 8 } },
+      { s: { r: totalRowsLibro - 7, c: 0 }, e: { r: totalRowsLibro - 7, c: 5 } },
+      { s: { r: totalRowsLibro - 5, c: 0 }, e: { r: totalRowsLibro - 5, c: 8 } },
+      { s: { r: totalRowsLibro - 3, c: 0 }, e: { r: totalRowsLibro - 3, c: 3 } },
+      { s: { r: totalRowsLibro - 3, c: 4 }, e: { r: totalRowsLibro - 3, c: 8 } },
+      { s: { r: totalRowsLibro - 2, c: 0 }, e: { r: totalRowsLibro - 2, c: 3 } },
+      { s: { r: totalRowsLibro - 2, c: 4 }, e: { r: totalRowsLibro - 2, c: 8 } },
+      { s: { r: totalRowsLibro - 1, c: 0 }, e: { r: totalRowsLibro - 1, c: 3 } },
+      { s: { r: totalRowsLibro - 1, c: 4 }, e: { r: totalRowsLibro - 1, c: 8 } },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsLibro, "Libro Auxiliar Corte");
+
+    // ---------------------------------------------------------
+    // HOJA 2: RESUMEN POR RUBROS / CATEGORÍAS
+    // ---------------------------------------------------------
+    const catsGasto = Array.from(new Set(transaccionesCorte.filter(t => t.tipo_operacion === 'Salida').map(t => t.categoria))) as string[];
+    const catsIngreso = Array.from(new Set(transaccionesCorte.filter(t => t.tipo_operacion === 'Entrada').map(t => t.categoria))) as string[];
+
+    const wsRubrosData: any[][] = [
+      [{ v: institutionName, s: titleCenteredStyle }, {v:''}, {v:''}, {v:''}],
+      [{ v: `RESUMEN DE RUBROS Y CATEGORÍAS: ${activeCaja.nombre}`, s: subtitleCenteredStyle }, {v:''}, {v:''}, {v:''}],
+      [{ v: `PERÍODO: ${periodoTexto}`, s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, {v:''}, {v:''}, {v:''}],
+      [],
+      [{ v: "RESUMEN DE GASTOS POR RUBRO", s: headerLightBlueStyle }, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}],
+      [
+        { v: "Categoría de Gasto", s: headerBlueStyle },
+        { v: "N° Movimientos", s: headerBlueStyle },
+        { v: "Total Gastado", s: headerBlueStyle },
+        { v: "% Participación", s: headerBlueStyle }
+      ]
+    ];
+
+    catsGasto.forEach(cat => {
+      const transCat = transaccionesCorte.filter(t => t.tipo_operacion === 'Salida' && t.categoria === cat);
+      const catTotal = transCat.reduce((acc, curr) => acc + Number(curr.valor), 0);
+      const pct = totalGeneralGastos > 0 ? (catTotal / totalGeneralGastos) : 0;
+      wsRubrosData.push([
+        { v: cat, s: {} },
+        { v: transCat.length, t: 'n', s: { alignment: { horizontal: 'center' } } },
+        { v: catTotal, t: 'n', z: moneyFormat, s: moneyStyle },
+        { v: pct, t: 'n', z: '0.0%', s: { alignment: { horizontal: 'right' } } }
+      ]);
+    });
+
+    if (catsGasto.length === 0) {
+      wsRubrosData.push([{ v: "Sin gastos registrados", s: { font: { italic: true } } }, { v: 0, t: 'n' }, { v: 0, t: 'n', z: moneyFormat, s: moneyStyle }, { v: 0, t: 'n', z: '0.0%' }]);
+    }
+
+    wsRubrosData.push([
+      { v: "TOTAL GASTOS", s: totalRowLabelStyle },
+      { v: transaccionesCorte.filter(t => t.tipo_operacion === 'Salida').length, t: 'n', s: { ...totalRowLabelStyle, alignment: { horizontal: 'center' } } },
+      { v: totalGeneralGastos, t: 'n', z: moneyFormatDecimals, s: totalRowGastosStyle },
+      { v: 1, t: 'n', z: '100.0%', s: totalRowGastosStyle }
+    ]);
+
+    wsRubrosData.push([]);
+    wsRubrosData.push([{ v: "RESUMEN DE INGRESOS POR RUBRO", s: headerLightBlueStyle }, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}]);
+    wsRubrosData.push([
+      { v: "Categoría de Ingreso", s: headerBlueStyle },
+      { v: "N° Movimientos", s: headerBlueStyle },
+      { v: "Total Ingresado", s: headerBlueStyle },
+      { v: "% Participación", s: headerBlueStyle }
+    ]);
+
+    catsIngreso.forEach(cat => {
+      const transCat = transaccionesCorte.filter(t => t.tipo_operacion === 'Entrada' && t.categoria === cat);
+      const catTotal = transCat.reduce((acc, curr) => acc + Number(curr.valor), 0);
+      const pct = totalGeneralIngresos > 0 ? (catTotal / totalGeneralIngresos) : 0;
+      wsRubrosData.push([
+        { v: cat, s: {} },
+        { v: transCat.length, t: 'n', s: { alignment: { horizontal: 'center' } } },
+        { v: catTotal, t: 'n', z: moneyFormat, s: moneyStyle },
+        { v: pct, t: 'n', z: '0.0%', s: { alignment: { horizontal: 'right' } } }
+      ]);
+    });
+
+    if (catsIngreso.length === 0) {
+      wsRubrosData.push([{ v: "Sin ingresos registrados", s: { font: { italic: true } } }, { v: 0, t: 'n' }, { v: 0, t: 'n', z: moneyFormat, s: moneyStyle }, { v: 0, t: 'n', z: '0.0%' }]);
+    }
+
+    wsRubrosData.push([
+      { v: "TOTAL INGRESOS", s: totalRowLabelStyle },
+      { v: transaccionesCorte.filter(t => t.tipo_operacion === 'Entrada').length, t: 'n', s: { ...totalRowLabelStyle, alignment: { horizontal: 'center' } } },
+      { v: totalGeneralIngresos, t: 'n', z: moneyFormatDecimals, s: totalRowIngresosStyle },
+      { v: 1, t: 'n', z: '100.0%', s: totalRowIngresosStyle }
+    ]);
+
+    const wsRubros = XLSX.utils.aoa_to_sheet(wsRubrosData);
+    wsRubros['!cols'] = [{ wch: 35 }, { wch: 18 }, { wch: 22 }, { wch: 18 }];
+    wsRubros['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 3 } },
+      { s: { r: 4, c: 0 }, e: { r: 4, c: 3 } },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsRubros, "Resumen por Rubros");
+
+    // ---------------------------------------------------------
+    // HOJA 3: INGRESOS MENSUALES
     // ---------------------------------------------------------
     const wsIngresosData: any[][] = [
       [{ v: institutionName, s: titleStyle }],
       [{ v: "REPORTE DE INGRESOS MENSUALES", s: subtitleStyle }],
       [],
       [],
-      [{ v: `AÑO: ${filtroAno}`, s: headerLightBlueStyle }],
+      [{ v: `PERÍODO: ${periodoTexto}`, s: headerLightBlueStyle }],
       [],
       [],
       [{ v: "Concepto", s: headerBlueStyle }] 
     ];
     
-    const mesesConIngresos = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada').map(t => t.mes))).sort((a,b) => mesesOrder.indexOf(a as string) - mesesOrder.indexOf(b as string)) as string[];
+    const mesesConIngresos = Array.from(new Set(transaccionesCorte.filter(t => t.tipo_operacion === 'Entrada').map(t => t.mes))).sort((a,b) => mesesOrder.indexOf(a as string) - mesesOrder.indexOf(b as string)) as string[];
     
     mesesConIngresos.forEach(m => wsIngresosData[7].push({ v: m.slice(0,3).toLowerCase(), s: headerBlueStyle }));
     wsIngresosData[7].push({ v: "Total INGRESOS", s: headerBlueStyle });
-
-    const catsIngreso = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada').map(t => t.categoria))) as string[];
     
     wsIngresosData.push([{ v: "- INGRESOS", s: headerLightBlueStyle }]); 
     
-    let totalGeneralIngresos = 0;
     const totalesPorMesIng = Object.fromEntries(mesesConIngresos.map((m: string) => [m, 0]));
 
     catsIngreso.forEach((cat: string) => {
       const row: any[] = [{ v: `    ${cat}`, s: {} }];
       let totalCat = 0;
       mesesConIngresos.forEach((m: string) => {
-        const sum = transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada' && t.categoria === cat && t.mes === m).reduce((acc: number, curr: any) => acc + Number(curr.valor), 0);
+        const sum = transaccionesCorte.filter(t => t.tipo_operacion === 'Entrada' && t.categoria === cat && t.mes === m).reduce((acc: number, curr: any) => acc + Number(curr.valor), 0);
         row.push({ v: sum || 0, t: 'n', z: moneyFormat, s: moneyStyle });
         totalCat += sum;
         totalesPorMesIng[m] += sum;
       });
       row.push({ v: totalCat, t: 'n', z: moneyFormat, s: moneyStyle });
-      totalGeneralIngresos += totalCat;
       wsIngresosData.push(row);
     });
 
@@ -485,47 +786,43 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
       { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
       { s: { r: 4, c: 0 }, e: { r: 4, c: 2 } }, 
-      { s: { r: 8, c: 0 }, e: { r: 8, c: mesesConIngresos.length + 1 } }, 
+      { s: { r: 8, c: 0 }, e: { r: 8, c: Math.max(mesesConIngresos.length + 1, 1) } }, 
     ];
     XLSX.utils.book_append_sheet(wb, wsIngresos, "Ingresos Mensuales");
 
     // ---------------------------------------------------------
-    // HOJA 2: GASTOS MENSUALES
+    // HOJA 4: GASTOS MENSUALES
     // ---------------------------------------------------------
     const wsGastosData: any[][] = [
       [{ v: institutionName, s: titleStyle }],
       [{ v: "REPORTE DE GASTOS MENSUALES", s: subtitleStyle }],
       [],
       [],
-      [{ v: `AÑO: ${filtroAno}`, s: headerLightBlueStyle }],
+      [{ v: `PERÍODO: ${periodoTexto}`, s: headerLightBlueStyle }],
       [],
       [],
       [{ v: "Concepto", s: headerBlueStyle }] 
     ];
     
-    const mesesConGastos = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida').map(t => t.mes))).sort((a,b) => mesesOrder.indexOf(a as string) - mesesOrder.indexOf(b as string)) as string[];
+    const mesesConGastos = Array.from(new Set(transaccionesCorte.filter(t => t.tipo_operacion === 'Salida').map(t => t.mes))).sort((a,b) => mesesOrder.indexOf(a as string) - mesesOrder.indexOf(b as string)) as string[];
     
     mesesConGastos.forEach(m => wsGastosData[7].push({ v: m.slice(0,3).toLowerCase(), s: headerBlueStyle }));
     wsGastosData[7].push({ v: "Total GASTOS", s: headerBlueStyle });
-
-    const catsGasto = Array.from(new Set(transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida').map(t => t.categoria))) as string[];
     
     wsGastosData.push([{ v: "- GASTOS", s: headerLightBlueStyle }]); 
     
-    let totalGeneralGastos = 0;
     const totalesPorMesGas = Object.fromEntries(mesesConGastos.map((m: string) => [m, 0]));
 
     catsGasto.forEach((cat: string) => {
       const row: any[] = [{ v: `    ${cat}`, s: {} }];
       let totalCat = 0;
       mesesConGastos.forEach((m: string) => {
-        const sum = transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida' && t.categoria === cat && t.mes === m).reduce((acc: number, curr: any) => acc + Number(curr.valor), 0);
+        const sum = transaccionesCorte.filter(t => t.tipo_operacion === 'Salida' && t.categoria === cat && t.mes === m).reduce((acc: number, curr: any) => acc + Number(curr.valor), 0);
         row.push({ v: sum || 0, t: 'n', z: moneyFormat, s: moneyStyle });
         totalCat += sum;
         totalesPorMesGas[m] += sum;
       });
       row.push({ v: totalCat, t: 'n', z: moneyFormat, s: moneyStyle });
-      totalGeneralGastos += totalCat;
       wsGastosData.push(row);
     });
 
@@ -542,22 +839,22 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
       { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
       { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
       { s: { r: 4, c: 0 }, e: { r: 4, c: 2 } }, 
-      { s: { r: 8, c: 0 }, e: { r: 8, c: mesesConGastos.length + 1 } }, 
+      { s: { r: 8, c: 0 }, e: { r: 8, c: Math.max(mesesConGastos.length + 1, 1) } }, 
     ];
     XLSX.utils.book_append_sheet(wb, wsGastos, "Gastos Mensuales");
 
     // ---------------------------------------------------------
-    // HOJA 3: DETALLADO POR MES ADICIONALES
+    // HOJA 5: DETALLADO GENERAL POR MES Y CATEGORÍA
     // ---------------------------------------------------------
     const wsDetalladoData: any[][] = [
       [{ v: institutionName, s: titleCenteredStyle }, {v:''}, {v:''}, {v:''}],
-      [{ v: "REPORTE DE INGRESOS Y GASTOS DETALLADO POR MES ADICIONALES", s: subtitleCenteredStyle }, {v:''}, {v:''}, {v:''}],
+      [{ v: "REPORTE DE INGRESOS Y GASTOS DETALLADO POR CORTE", s: subtitleCenteredStyle }, {v:''}, {v:''}, {v:''}],
       [],
-      [{ v: `AÑO: (Todas)`, s: headerLightBlueStyle }, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}],
-      [{ v: `Fecha: (Todas)`, s: headerLightBlueStyle }, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}],
-      [{ v: "nota: estos datos se borrarán y se actualizarán automáticamente al ingresar su información", s: noteStyle }, {v:'', s: noteStyle}, {v:'', s: noteStyle}, {v:'', s: noteStyle}],
+      [{ v: `Caja Menor: ${activeCaja.nombre}`, s: headerLightBlueStyle }, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}],
+      [{ v: `Período: ${periodoTexto}`, s: headerLightBlueStyle }, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}, {v:'', s: headerLightBlueStyle}],
+      [{ v: "nota: estos datos corresponden al corte contable seleccionado y están auditados", s: noteStyle }, {v:'', s: noteStyle}, {v:'', s: noteStyle}, {v:'', s: noteStyle}],
       [
-        { v: "DESCRIPCIÓN DE GASTOS REALIZADOS DURANTE EL MES", s: headerBlueStyle },
+        { v: "DESCRIPCIÓN DE MOVIMIENTOS", s: headerBlueStyle },
         { v: "Entrada", s: headerBlueStyle },
         { v: "SALIDAS", s: headerBlueStyle },
         { v: "Saldo", s: headerBlueStyle }
@@ -572,7 +869,7 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
     ]);
 
     catsIngreso.forEach(cat => {
-      const transCat = transaccionesDelAno.filter(t => t.tipo_operacion === 'Entrada' && t.categoria === cat);
+      const transCat = transaccionesCorte.filter(t => t.tipo_operacion === 'Entrada' && t.categoria === cat);
       const catTotal = transCat.reduce((acc, curr) => acc + Number(curr.valor), 0);
       
       wsDetalladoData.push([
@@ -601,7 +898,7 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
     ]);
 
     catsGasto.forEach(cat => {
-      const transCat = transaccionesDelAno.filter(t => t.tipo_operacion === 'Salida' && t.categoria === cat);
+      const transCat = transaccionesCorte.filter(t => t.tipo_operacion === 'Salida' && t.categoria === cat);
       const catTotal = transCat.reduce((acc, curr) => acc + Number(curr.valor), 0);
       
       wsDetalladoData.push([
@@ -641,7 +938,10 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
     ];
     XLSX.utils.book_append_sheet(wb, wsDetallado, "Detallado por Mes");
 
-    XLSX.writeFile(wb, `Reportes_${activeCaja.nombre}_${filtroAno}.xlsx`);
+    const safeCajaName = activeCaja.nombre.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeFechaFin = fechaFin || anoReporte;
+    const nombreArchivo = `Reporte_Corte_${safeCajaName}_al_${safeFechaFin}.xlsx`;
+    XLSX.writeFile(wb, nombreArchivo);
   };
 
   return (
@@ -657,7 +957,9 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
             <p className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">
               {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(totalIngresos)}
             </p>
-            <p className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">Ingresos del Mes ({filtroMes})</p>
+            <p className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+              Ingresos {filtroMes === 'TODOS' ? `del Año (${filtroAno})` : `del Mes (${filtroMes})`}
+            </p>
           </div>
         </div>
 
@@ -669,7 +971,9 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
             <p className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">
               {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(totalGastos)}
             </p>
-            <p className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">Gastos del Mes ({filtroMes})</p>
+            <p className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+              Gastos {filtroMes === 'TODOS' ? `del Año (${filtroAno})` : `del Mes (${filtroMes})`}
+            </p>
           </div>
         </div>
 
@@ -681,7 +985,9 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
             <p className={`text-xl md:text-2xl font-bold tracking-tight ${saldoFinal >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
               {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(saldoFinal)}
             </p>
-            <p className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">Saldo Disponible ({filtroMes})</p>
+            <p className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+              Saldo Disponible {filtroMes === 'TODOS' ? `del Año (${filtroAno})` : `(${filtroMes})`}
+            </p>
           </div>
         </div>
       </section>
@@ -809,10 +1115,11 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
               </button>
               <div className="flex gap-2 flex-wrap justify-center">
                 <button
-                  onClick={generateExcel}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl hover:bg-slate-700 text-sm font-bold shadow-md transition-all"
+                  onClick={() => setShowReporteCorteModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl hover:bg-slate-700 text-sm font-bold shadow-md transition-all hover:ring-2 hover:ring-emerald-500/50"
+                  title="Generar reporte con fecha final / corte contable"
                 >
-                  <FileSpreadsheet className="w-4 h-4" />
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                   Descargar Reporte Excel
                 </button>
                 <button
@@ -834,15 +1141,25 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between bg-slate-50 gap-4">
-                <h3 className="font-bold text-slate-800 whitespace-nowrap">Libro Mayor - {filtroMes} {filtroAno}</h3>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h3 className="font-bold text-slate-800 whitespace-nowrap">
+                    Libro Mayor - {filtroMes === 'TODOS' ? 'Todos los Movimientos' : filtroMes} {filtroAno}
+                  </h3>
+                  {hayBusquedaTexto && (
+                    <span className="text-[11px] bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      Buscando en todos los meses
+                    </span>
+                  )}
+                </div>
                 
-                <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-center flex-wrap">
                   <div className="flex items-center bg-white border border-slate-300 rounded-lg px-2">
                     <select
                       value={filtroMes}
                       onChange={(e) => setFiltroMes(e.target.value)}
                       className="bg-transparent border-none text-sm font-bold text-slate-700 py-2 pl-1 pr-2 focus:ring-0 cursor-pointer outline-none"
                     >
+                      <option value="TODOS">Todos los Meses</option>
                       {MESES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                     </select>
                     <div className="w-px h-4 bg-slate-300 mx-1"></div>
@@ -854,26 +1171,53 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
                       {[currentYearStr, String(Number(currentYearStr)-1)].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                   </div>
-                  <input
-                    type="date"
-                    value={filtroTablaFecha}
-                    onChange={(e) => setFiltroTablaFecha(e.target.value)}
-                    className="p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={filtroTablaFecha}
+                      onChange={(e) => setFiltroTablaFecha(e.target.value)}
+                      className="p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-500 bg-white"
+                      title="Filtrar por fecha específica"
+                    />
+                    {filtroTablaFecha && (
+                      <button 
+                        onClick={() => setFiltroTablaFecha('')}
+                        className="absolute -top-2 -right-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-full w-4 h-4 flex items-center justify-center text-[10px]"
+                        title="Quitar filtro de fecha"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     placeholder="Filtrar por Concepto..."
                     value={filtroTablaConcepto}
                     onChange={(e) => setFiltroTablaConcepto(e.target.value)}
-                    className="p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-500 w-full md:w-48"
+                    className="p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-500 w-full md:w-48 bg-white"
                   />
                   <input
                     type="text"
                     placeholder="Filtrar por Tercero..."
                     value={filtroTablaTercero}
                     onChange={(e) => setFiltroTablaTercero(e.target.value)}
-                    className="p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-500 w-full md:w-48"
+                    className="p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-500 w-full md:w-48 bg-white"
                   />
+                  {(filtroTablaConcepto || filtroTablaTercero || filtroTablaFecha || filtroMes !== 'TODOS') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFiltroTablaConcepto('');
+                        setFiltroTablaTercero('');
+                        setFiltroTablaFecha('');
+                        setFiltroMes('TODOS');
+                      }}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-bold px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                      title="Ver todos los movimientos y limpiar filtros"
+                    >
+                      Mostrar Todo
+                    </button>
+                  )}
                 </div>
                 <span className="text-xs text-slate-500 font-medium whitespace-nowrap">{transaccionesTabla.length} movimientos</span>
               </div>
@@ -935,11 +1279,29 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
                         </td>
                       </tr>
                     ))}
-                    {transaccionesConSaldo.length === 0 && (
+                    {transaccionesTabla.length === 0 && (
                       <tr>
                         <td colSpan={7} className="p-8 text-center text-slate-400">
                           <Wallet className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                          <p>No hay transacciones registradas en este mes.</p>
+                          <p className="font-medium text-slate-600">
+                            {hayBusquedaTexto 
+                              ? 'No se encontraron movimientos que coincidan con la búsqueda.' 
+                              : 'No hay transacciones registradas en este período.'}
+                          </p>
+                          {(hayBusquedaTexto || filtroTablaFecha || filtroMes !== 'TODOS') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFiltroTablaConcepto('');
+                                setFiltroTablaTercero('');
+                                setFiltroTablaFecha('');
+                                setFiltroMes('TODOS');
+                              }}
+                              className="mt-2 text-xs text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
+                            >
+                              Mostrar todos los movimientos
+                            </button>
+                          )}
                         </td>
                       </tr>
                     )}
@@ -1051,6 +1413,20 @@ export const CajaMenorPanel: React.FC<CajaMenorPanelProps> = ({ userSession }) =
           transacciones={transacciones.filter(t => t.caja_id === activeCajaId && t.ano === filtroAno)}
           filtroAno={filtroAno}
           nombreCaja={activeCaja?.nombre || ''}
+        />
+      )}
+
+      {showReporteCorteModal && activeCaja && (
+        <ReporteCorteModal
+          onClose={() => setShowReporteCorteModal(false)}
+          onGenerate={(opts) => {
+            generateExcel(opts);
+            setShowReporteCorteModal(false);
+          }}
+          activeCaja={activeCaja}
+          transacciones={transacciones}
+          filtroAno={filtroAno}
+          userSession={userSession}
         />
       )}
 
@@ -1324,6 +1700,481 @@ function CalculadoraArqueo({ onClose, onInsertTotal }: { onClose: () => void, on
         </div>
       </div>
     </div>
+    </div>
+  );
+}
+
+interface ReporteCorteModalProps {
+  onClose: () => void;
+  onGenerate: (opciones: OpcionesReporteCorte) => void;
+  activeCaja: Caja;
+  transacciones: CajaTransaccion[];
+  filtroAno: string;
+  userSession?: any;
+}
+
+function ReporteCorteModal({
+  onClose,
+  onGenerate,
+  activeCaja,
+  transacciones,
+  filtroAno,
+  userSession
+}: ReporteCorteModalProps) {
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(val);
+  };
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const startOfYearStr = `${filtroAno || new Date().getFullYear()}-01-01`;
+
+  const [tipoPeriodo, setTipoPeriodo] = useState<'corte' | 'rango' | 'ano'>('corte');
+  const [fechaFin, setFechaFin] = useState<string>(() => {
+    const currentYear = filtroAno || new Date().getFullYear().toString();
+    if (todayStr.startsWith(currentYear)) return todayStr;
+    return `${currentYear}-12-31`;
+  });
+  const [fechaInicio, setFechaInicio] = useState<string>(startOfYearStr);
+  const [identificadorCorte, setIdentificadorCorte] = useState('');
+  const [responsable, setResponsable] = useState(userSession?.user?.name || userSession?.user?.email?.split('@')[0] || '');
+  const [mostrarDetalleMovimientos, setMostrarDetalleMovimientos] = useState(false);
+
+  useEffect(() => {
+    const defaultStart = `${filtroAno || new Date().getFullYear()}-01-01`;
+    setFechaInicio(defaultStart);
+    if (todayStr.startsWith(filtroAno)) {
+      setFechaFin(todayStr);
+    } else {
+      setFechaFin(`${filtroAno}-12-31`);
+    }
+  }, [filtroAno]);
+
+  // Accesos rápidos de fecha de corte dentro del año fiscal
+  const handleQuickDate = (tipo: 'hoy' | 'ayer' | 'finMesActual' | 'finMesAnterior') => {
+    const d = new Date();
+    const currentYear = Number(filtroAno || d.getFullYear());
+    if (tipo === 'hoy') {
+      if (d.getFullYear() === currentYear) {
+        setFechaFin(d.toISOString().split('T')[0]);
+      } else {
+        setFechaFin(`${currentYear}-12-31`);
+      }
+    } else if (tipo === 'ayer') {
+      d.setDate(d.getDate() - 1);
+      if (d.getFullYear() === currentYear) {
+        setFechaFin(d.toISOString().split('T')[0]);
+      } else {
+        setFechaFin(`${currentYear}-12-31`);
+      }
+    } else if (tipo === 'finMesActual') {
+      const month = d.getFullYear() === currentYear ? d.getMonth() : 11;
+      const lastDay = new Date(currentYear, month + 1, 0);
+      setFechaFin(lastDay.toISOString().split('T')[0]);
+    } else if (tipo === 'finMesAnterior') {
+      const month = d.getFullYear() === currentYear ? d.getMonth() - 1 : 10;
+      const lastDay = new Date(currentYear, month + 1, 0);
+      setFechaFin(lastDay.toISOString().split('T')[0]);
+    }
+  };
+
+  // Determinar la fecha de inicio efectiva (siempre dentro del año fiscal seleccionado)
+  const effectiveFechaInicio = useMemo(() => {
+    if (tipoPeriodo === 'corte') {
+      return fechaInicio;
+    }
+    if (tipoPeriodo === 'ano') {
+      return `${filtroAno}-01-01`;
+    }
+    return fechaInicio;
+  }, [tipoPeriodo, fechaInicio, filtroAno]);
+
+  // Determinar la fecha de fin efectiva (siempre dentro del año fiscal seleccionado)
+  const effectiveFechaFin = useMemo(() => {
+    if (tipoPeriodo === 'ano') {
+      return `${filtroAno}-12-31`;
+    }
+    return fechaFin;
+  }, [tipoPeriodo, fechaFin, filtroAno]);
+
+  // Transacciones previas para saldo anterior (exclusivamente del año seleccionado)
+  const transaccionesPrevias = useMemo(() => {
+    if (!effectiveFechaInicio) return [];
+    return transacciones.filter(t => {
+      if (t.caja_id !== activeCaja.id) return false;
+      if (t.ano !== filtroAno) return false;
+      return t.fecha < effectiveFechaInicio;
+    });
+  }, [transacciones, activeCaja.id, effectiveFechaInicio, filtroAno]);
+
+  const saldoAnterior = useMemo(() => {
+    return transaccionesPrevias.reduce((acc, curr) => {
+      return curr.tipo_operacion === 'Entrada' ? acc + Number(curr.valor) : acc - Number(curr.valor);
+    }, 0);
+  }, [transaccionesPrevias]);
+
+  // Transacciones comprendidas en el corte (exclusivamente del año seleccionado)
+  const transaccionesCorte = useMemo(() => {
+    return transacciones
+      .filter(t => {
+        if (t.caja_id !== activeCaja.id) return false;
+        if (t.ano !== filtroAno) return false;
+        if (effectiveFechaInicio && t.fecha < effectiveFechaInicio) return false;
+        if (effectiveFechaFin && t.fecha > effectiveFechaFin) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+  }, [transacciones, activeCaja.id, effectiveFechaInicio, effectiveFechaFin, filtroAno]);
+
+  const totalIngresos = useMemo(() => {
+    return transaccionesCorte
+      .filter(t => t.tipo_operacion === 'Entrada')
+      .reduce((acc, curr) => acc + Number(curr.valor), 0);
+  }, [transaccionesCorte]);
+
+  const totalGastos = useMemo(() => {
+    return transaccionesCorte
+      .filter(t => t.tipo_operacion === 'Salida')
+      .reduce((acc, curr) => acc + Number(curr.valor), 0);
+  }, [transaccionesCorte]);
+
+  const saldoNeto = totalIngresos - totalGastos;
+  const saldoFinalCorte = saldoAnterior + saldoNeto;
+
+  const entradasCount = transaccionesCorte.filter(t => t.tipo_operacion === 'Entrada').length;
+  const salidasCount = transaccionesCorte.filter(t => t.tipo_operacion === 'Salida').length;
+
+  const handleDescargar = () => {
+    if (!effectiveFechaFin) {
+      alert('Por favor especifique la fecha final de corte.');
+      return;
+    }
+    onGenerate({
+      fechaInicio: effectiveFechaInicio,
+      fechaFin: effectiveFechaFin,
+      identificadorCorte: identificadorCorte.trim(),
+      responsable: responsable.trim(),
+      ano: filtroAno
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden relative flex flex-col max-h-[92vh] border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+        {/* HEADER */}
+        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 p-6 text-white relative">
+          <button
+            onClick={onClose}
+            className="absolute top-5 right-5 text-slate-400 hover:text-white bg-white/15 hover:bg-white/20 p-2 rounded-full transition-all"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
+              <FileSpreadsheet className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
+                Generar Reporte por Corte Contable
+              </h3>
+              <p className="text-xs text-emerald-300 font-medium mt-0.5 flex items-center gap-2 flex-wrap">
+                <span>Caja Menor: <strong className="text-white uppercase">{activeCaja.nombre}</strong></span>
+                <span>•</span>
+                <span>Año Fiscal: <strong className="text-white bg-emerald-800/60 px-2 py-0.5 rounded border border-emerald-500/40">{filtroAno}</strong></span>
+                <span>•</span>
+                <span>Institución Educativa Alvernia</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* BODY (SCROLLABLE) */}
+        <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/50">
+          {/* SELECCIÓN DE MODALIDAD / TABS */}
+          <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-3 gap-1">
+            <button
+              type="button"
+              onClick={() => setTipoPeriodo('corte')}
+              className={`py-2.5 px-3 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
+                tipoPeriodo === 'corte'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <CalendarDays className="w-4 h-4" />
+              <span>Corte a Fecha Final</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTipoPeriodo('rango')}
+              className={`py-2.5 px-3 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
+                tipoPeriodo === 'rango'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <CalendarIcon className="w-4 h-4" />
+              <span>Rango Entre Fechas</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTipoPeriodo('ano')}
+              className={`py-2.5 px-3 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all ${
+                tipoPeriodo === 'ano'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>Año Completo ({filtroAno})</span>
+            </button>
+          </div>
+
+          {/* CONTROLES DE FECHAS */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                Parámetros del Corte
+              </span>
+              {tipoPeriodo !== 'ano' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-slate-400 font-medium mr-1">Accesos rápidos:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDate('hoy')}
+                    className="text-[11px] font-bold px-2 py-1 bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 rounded-lg transition-colors"
+                  >
+                    Hoy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDate('finMesActual')}
+                    className="text-[11px] font-bold px-2 py-1 bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 rounded-lg transition-colors"
+                  >
+                    Fin Mes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDate('finMesAnterior')}
+                    className="text-[11px] font-bold px-2 py-1 bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 rounded-lg transition-colors"
+                  >
+                    Mes Ant.
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* FECHA INICIAL */}
+              {tipoPeriodo !== 'ano' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1.5">
+                    FECHA INICIAL (DESDE)
+                  </label>
+                  <input
+                    type="date"
+                    min={`${filtroAno}-01-01`}
+                    max={`${filtroAno}-12-31`}
+                    value={fechaInicio}
+                    onChange={(e) => setFechaInicio(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1.5">
+                    Acotado al año fiscal {filtroAno}.
+                  </p>
+                </div>
+              )}
+
+              {/* FECHA FINAL (FECHA DE CORTE) */}
+              <div className={tipoPeriodo === 'ano' ? 'md:col-span-2' : ''}>
+                <label className="block text-xs font-black text-emerald-800 mb-1.5 flex items-center justify-between">
+                  <span>FECHA FINAL DEL REPORTE (FECHA DE CORTE) *</span>
+                  <span className="text-[10px] font-normal text-slate-400">Año {filtroAno}</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    min={`${filtroAno}-01-01`}
+                    max={`${filtroAno}-12-31`}
+                    disabled={tipoPeriodo === 'ano'}
+                    required
+                    value={effectiveFechaFin}
+                    onChange={(e) => setFechaFin(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-emerald-50/50 border-2 border-emerald-500 rounded-xl text-sm font-black text-emerald-950 focus:ring-2 focus:ring-emerald-600 focus:bg-white outline-none shadow-sm transition-all"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  Solo se incluirán los movimientos de {filtroAno} registrados hasta esta fecha límite.
+                </p>
+              </div>
+            </div>
+
+            {/* IDENTIFICADOR Y RESPONSABLE */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">
+                  IDENTIFICADOR O N° DE CORTE (OPCIONAL)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Corte N° 01 - Legalización de Gastos"
+                  value={identificadorCorte}
+                  onChange={(e) => setIdentificadorCorte(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">
+                  RESPONSABLE / ELABORADO POR
+                </label>
+                <input
+                  type="text"
+                  placeholder="Nombre de quien presenta el corte"
+                  value={responsable}
+                  onChange={(e) => setResponsable(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* PREVISUALIZACIÓN DE TOTALES / KPIS EN VIVO */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                Resumen del Corte Seleccionado
+              </span>
+              <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full">
+                {transaccionesCorte.length} movimientos ({entradasCount} entradas, {salidasCount} salidas)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+              {/* SALDO ANTERIOR */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Saldo Anterior</span>
+                <span className="text-sm md:text-base font-bold text-slate-700 block mt-0.5">
+                  {formatCurrency(saldoAnterior)}
+                </span>
+              </div>
+
+              {/* INGRESOS */}
+              <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-100">
+                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block flex items-center gap-1">
+                  <ArrowUpCircle className="w-3 h-3" /> (+) Ingresos
+                </span>
+                <span className="text-sm md:text-base font-bold text-emerald-700 block mt-0.5">
+                  {formatCurrency(totalIngresos)}
+                </span>
+              </div>
+
+              {/* GASTOS */}
+              <div className="p-3 bg-rose-50/70 rounded-xl border border-rose-100">
+                <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block flex items-center gap-1">
+                  <ArrowDownCircle className="w-3 h-3" /> (-) Gastos
+                </span>
+                <span className="text-sm md:text-base font-bold text-rose-700 block mt-0.5">
+                  {formatCurrency(totalGastos)}
+                </span>
+              </div>
+
+              {/* SALDO FINAL */}
+              <div className={`p-3 rounded-xl border ${saldoFinalCorte >= 0 ? 'bg-blue-50/70 border-blue-200 text-blue-900' : 'bg-red-50/70 border-red-200 text-red-900'}`}>
+                <span className="text-[10px] font-black uppercase tracking-wider block flex items-center gap-1">
+                  <DollarSign className="w-3 h-3" /> (=) Saldo al Corte
+                </span>
+                <span className="text-base md:text-lg font-black block mt-0.5">
+                  {formatCurrency(saldoFinalCorte)}
+                </span>
+              </div>
+            </div>
+
+            {/* TOGGLE DETALLE DE MOVIMIENTOS */}
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setMostrarDetalleMovimientos(!mostrarDetalleMovimientos)}
+                className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-between transition-colors"
+              >
+                <span>Previsualizar listado de transacciones ({transaccionesCorte.length})</span>
+                {mostrarDetalleMovimientos ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+
+              {mostrarDetalleMovimientos && (
+                <div className="mt-3 max-h-56 overflow-y-auto border border-slate-200 rounded-xl overflow-x-auto bg-white">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-100 text-slate-600 font-bold uppercase sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2">Fecha</th>
+                        <th className="px-3 py-2">Tipo</th>
+                        <th className="px-3 py-2">Categoría</th>
+                        <th className="px-3 py-2">Concepto</th>
+                        <th className="px-3 py-2 text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {transaccionesCorte.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-4 text-center text-slate-400 italic">
+                            No hay movimientos en este rango de fechas.
+                          </td>
+                        </tr>
+                      ) : (
+                        transaccionesCorte.map((t) => (
+                          <tr key={t.id} className="hover:bg-slate-50">
+                            <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-600">
+                              {t.fecha.split('-').reverse().join('/')}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                                t.tipo_operacion === 'Entrada' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                              }`}>
+                                {t.tipo_operacion}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{t.categoria}</td>
+                            <td className="px-3 py-2 text-slate-600 max-w-xs truncate">{t.concepto}</td>
+                            <td className={`px-3 py-2 text-right font-bold whitespace-nowrap ${
+                              t.tipo_operacion === 'Entrada' ? 'text-emerald-600' : 'text-rose-600'
+                            }`}>
+                              {formatCurrency(Number(t.valor))}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* FOOTER ACTIONS */}
+        <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto px-5 py-2.5 border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-100 transition-colors text-sm"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDescargar}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-7 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl shadow-lg shadow-emerald-700/25 transition-all text-sm active:scale-[0.98]"
+          >
+            <Download className="w-4 h-4" />
+            <span>Descargar Reporte Excel ({transaccionesCorte.length} movs)</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

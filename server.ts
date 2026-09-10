@@ -1,4 +1,5 @@
 import express from "express";
+import http from "http";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import pg from "pg";
@@ -10,7 +11,7 @@ dotenv.config();
 
 const { Pool } = pg;
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Setup JSON parsing with high limit to handle PDF/Word base64 payloads
 app.use(express.json({ limit: "50mb" }));
@@ -2125,9 +2126,14 @@ genericCRUD('caja-transacciones', 'alvernia_caja_transacciones');
 // --- INTEGRATE VITE FOR DEVELOPMENT / SERVE STATIC FOR PRODUCTION ---
 
 async function startServer() {
+  const httpServer = http.createServer(app);
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: { server: httpServer },
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -2139,8 +2145,17 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Full-Stack Server running on http://localhost:${PORT}`);
+  httpServer.on("error", (err: any) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`\n⚠️ ERROR: El puerto ${PORT} ya está en uso por otra aplicación o proceso en segundo plano.`);
+      console.error(`Puedes liberar el puerto cerrando el proceso anterior o configurar PORT=${Number(PORT) + 1} en tu archivo .env\n`);
+    } else {
+      console.error("Error en el servidor:", err);
+    }
+  });
+
+  httpServer.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`\n🚀 Servidor activo correctamente en http://localhost:${PORT}\n`);
   });
 }
 
