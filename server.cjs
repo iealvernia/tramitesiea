@@ -23,6 +23,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // server.ts
 var import_express = __toESM(require("express"), 1);
+var import_http = __toESM(require("http"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_vite = require("vite");
 var import_pg = __toESM(require("pg"), 1);
@@ -32,7 +33,7 @@ var import_crypto = __toESM(require("crypto"), 1);
 import_dotenv.default.config();
 var { Pool } = import_pg.default;
 var app = (0, import_express.default)();
-var PORT = 3e3;
+var PORT = process.env.PORT || 3e3;
 app.use(import_express.default.json({ limit: "50mb" }));
 app.use(import_express.default.urlencoded({ limit: "50mb", extended: true }));
 var pgPool = null;
@@ -1919,9 +1920,13 @@ app.post("/api/restore", async (req, res) => {
 genericCRUD("cajas", "alvernia_cajas");
 genericCRUD("caja-transacciones", "alvernia_caja_transacciones");
 async function startServer() {
+  const httpServer = import_http.default.createServer(app);
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: { server: httpServer }
+      },
       appType: "spa"
     });
     app.use(vite.middlewares);
@@ -1932,8 +1937,20 @@ async function startServer() {
       res.sendFile(import_path.default.join(distPath, "index.html"));
     });
   }
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Full-Stack Server running on http://localhost:${PORT}`);
+  httpServer.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`
+\u26A0\uFE0F ERROR: El puerto ${PORT} ya est\xE1 en uso por otra aplicaci\xF3n o proceso en segundo plano.`);
+      console.error(`Puedes liberar el puerto cerrando el proceso anterior o configurar PORT=${Number(PORT) + 1} en tu archivo .env
+`);
+    } else {
+      console.error("Error en el servidor:", err);
+    }
+  });
+  httpServer.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`
+\u{1F680} Servidor activo correctamente en http://localhost:${PORT}
+`);
   });
 }
 startServer();
