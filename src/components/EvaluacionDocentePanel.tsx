@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { 
@@ -633,6 +633,18 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       setIsMessagesModalOpen(true);
     }
   }, [triggerOpenMessages]);
+
+  // Auto-open messages modal on login if there are corrections needed
+  const hasAutoOpenedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentTeacher && evaluaciones.length > 0 && hasAutoOpenedRef.current !== currentTeacher.cedula) {
+      const evalsWithFeedback = evaluaciones.filter(e => e.cedula === currentTeacher.cedula && e.estado === 'Corregir' && ((e.historialRetroalimentacion && e.historialRetroalimentacion.length > 0) || e.observacionesAdmin?.trim()));
+      if (evalsWithFeedback.length > 0) {
+        setIsMessagesModalOpen(true);
+      }
+      hasAutoOpenedRef.current = currentTeacher.cedula;
+    }
+  }, [currentTeacher, evaluaciones]);
 
   // Admin config states
   const [showAdminConfig, setShowAdminConfig] = useState(false);
