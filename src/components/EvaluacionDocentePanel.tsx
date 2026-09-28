@@ -588,6 +588,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
   const [isBehaviorSelectorForAdmin, setIsBehaviorSelectorForAdmin] = useState(false);
   const [selectedCriteriaTemp, setSelectedCriteriaTemp] = useState<string[]>([]);
 
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [certificateModalData, setCertificateModalData] = useState<{ evalDoc: Evaluacion1278, teacher: DocenteEvaluacion } | null>(null);
+  const [certificatePeriod, setCertificatePeriod] = useState<string>('1');
+
   // Admin states
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [selectedEvalForInspection, setSelectedEvalForInspection] = useState<Evaluacion1278 | null>(null);
@@ -1442,6 +1446,11 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       setTeacherCedulaInput('');
       setPortalView('anexo2');
       showToast(`¡Bienvenido(a), ${found.nombre}!`);
+      
+      const evalsWithFeedback = evaluaciones.filter(e => e.cedula === found.cedula && e.estado === 'Corregir' && ((e.historialRetroalimentacion && e.historialRetroalimentacion.length > 0) || e.observacionesAdmin?.trim()));
+      if (evalsWithFeedback.length > 0) {
+        setIsMessagesModalOpen(true);
+      }
     } else {
       setLoginError('Número de documento no registrado como funcionario de la institución.');
     }
@@ -2304,7 +2313,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
   };
 
   // --- DOWNLOAD PORTAFOLIO WORD MODEL FORMAT (.doc) ---
-  const handleExportWordModelFormat = (teacher: DocenteEvaluacion) => {
+  const handleExportWordModelFormat = (teacher: DocenteEvaluacion, p_periodo: number) => {
     const customLogo = localStorage.getItem('iea_custom_logo') || '';
 
     let competenciesToUse: any[] = [];
@@ -2316,7 +2325,8 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
           area: c.area.toUpperCase(),
           comp: c.competencia.toUpperCase(),
           cont: c.contribucion || '',
-          ev: 'Registro fotográfico de participación en actividades institucionales.',
+          crit: c.criterios || '',
+          ev: c.evidencias || '',
           desc: c.evidencias || ''
         });
       });
@@ -2325,7 +2335,8 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
           area: 'COMPORTAMENTALES',
           comp: c.competencia.toUpperCase(),
           cont: 'Aplicación de criterios conductuales y actitudes esperadas.',
-          ev: 'Registro fotográfico de participación en actividades institucionales.',
+          crit: 'Demuestra habilidades sociales e institucionales según el protocolo del cargo.',
+          ev: c.evidencias || '',
           desc: c.evidencias || ''
         });
       });
@@ -2359,6 +2370,9 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
           
           <p style="font-size: 11pt; line-height: 1.5; text-align: justify;">
             <b>Contribución Individual:</b> ${c.cont}
+          </p><br/>
+          <p style="font-size: 11pt; line-height: 1.5; text-align: justify;">
+            <b>Criterio de Evaluación:</b> ${c.crit}
           </p><br/>
           <p style="font-size: 11pt; line-height: 1.5; text-align: justify;">
             <b>Evidencia:</b> ${c.ev}
@@ -2470,7 +2484,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
           <div class="cover">
             <br/><br/><br/>
             <p style="text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 5px;">REGISTRO DE EVIDENCIAS DECRETO 1278</p>
-            <p style="text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 5px;">02 SEGUIMIENTO</p>
+            <p style="text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 5px;">0${p_periodo} SEGUIMIENTO</p>
             
             <br/><br/><br/><br/><br/><br/>
             
@@ -3438,9 +3452,21 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
     downloadWordBlob(htmlContent, `Anexo5_Competencias_${teacher.nombre.replace(/\s+/g, '_')}_Seguimiento${evalDoc.periodo}.doc`);
   };
 
-  const handleExportCertificateWord = (evalDoc: Evaluacion1278, teacher: DocenteEvaluacion) => {
+  const handleExportCertificateWord = (evalDoc: Evaluacion1278, teacher: DocenteEvaluacion, periodoToCertify: string) => {
     const customLogo = localStorage.getItem('iea_custom_logo') || '';
     const activeRectorSignature = rectorSignature || localStorage.getItem('rector_signature_base64') || localStorage.getItem('iea_custom_signature') || '';
+
+    let textoCumplimiento = "";
+    if (periodoToCertify === '1') {
+      textoCumplimiento = `Ha cumplido satisfactoriamente con la entrega y sustentación del <b>ANEXO 2</b> y el <b>ANEXO 5</b> correspondientes al <span class="highlight" style="font-weight: bold; color: #1e3a8a;">SEGUIMIENTO 1</span>. Tras la exhaustiva revisión, el docente ha obtenido la aprobación oficial del evaluador directivo.`;
+    } else if (periodoToCertify === '2') {
+      textoCumplimiento = `Ha cumplido satisfactoriamente con la entrega del <b>portafolio de evidencias correspondiente al primer semestre del año</b> para el <span class="highlight" style="font-weight: bold; color: #1e3a8a;">SEGUIMIENTO 2</span>. Tras la exhaustiva revisión del portafolio consolidado, el docente ha obtenido la aprobación oficial del evaluador directivo.`;
+    } else if (periodoToCertify === '3') {
+      textoCumplimiento = `Ha cumplido satisfactoriamente con la entrega de las <b>evidencias del segundo semestre del año</b> para el <span class="highlight" style="font-weight: bold; color: #1e3a8a;">SEGUIMIENTO 3</span>. Tras la exhaustiva revisión del portafolio consolidado, el docente ha obtenido la aprobación oficial del evaluador directivo.`;
+    } else {
+      textoCumplimiento = `Ha reportado, sustentado y allegado a conformidad el total de las evidencias físicas e informes requeridos para soportar las competencias funcionales y comportamentales concertadas correspondientes al <span class="highlight" style="font-weight: bold; color: #1e3a8a;">SEGUIMIENTO ${periodoToCertify}</span>. Tras la exhaustiva revisión de la carpeta de evidencias y/o el portafolio consolidado, el docente ha obtenido la aprobación oficial del evaluador directivo, dando cumplimiento satisfactorio a sus compromisos laborales.`;
+    }
+
     const htmlContent = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
       <head>
@@ -3455,6 +3481,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
         </xml>
         <![endif]-->
         <style>
+          @page {
+            size: 8.5in 11in;
+            margin: 1in;
+          }
           p, li, .MsoNormal, .MsoHeader, .MsoFooter, td, th, div, span {
             margin: 0in !important;
             margin-bottom: .0001pt !important;
@@ -3463,124 +3493,120 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
             mso-padding-alt: 0in !important;
           }
           body {
-            font-family: 'Arial', sans-serif;
-            margin: 40px;
-            color: #333;
-            line-height: 1.6;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: #1e293b;
+            line-height: 1.8;
+          }
+          .certificate-box {
+            border: 6px solid #94a3b8;
+            padding: 50px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            text-align: center;
           }
           .header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 30px;
           }
           .title {
-            font-size: 18pt;
-            font-weight: bold;
-            color: #1e3a8a;
+            font-size: 26pt;
+            font-weight: 900;
+            color: #0f172a;
             text-transform: uppercase;
-            margin-bottom: 5px;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
           }
           .subtitle {
-            font-size: 12pt;
-            font-weight: bold;
-            color: #475569;
-            margin-bottom: 20px;
-          }
-          .certificate-box {
-            border: 4px double #1e3a8a;
-            padding: 30px;
-            background-color: #fafaf9;
-            border-radius: 8px;
+            font-size: 14pt;
+            font-weight: 600;
+            color: #64748b;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
           }
           .body-text {
-            font-size: 11pt;
+            font-size: 14pt;
             text-align: justify;
-            margin-bottom: 30px;
+            margin-bottom: 35px;
+            line-height: 1.6;
           }
           .highlight {
             font-weight: bold;
             color: #1e3a8a;
           }
-          .signature-section {
-            margin-top: 50px;
-            width: 100%;
+          .teacher-name {
+            font-size: 24pt;
+            font-weight: 800;
+            color: #2563eb;
+            margin: 30px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: center;
           }
-          .signature-box {
+          .signature-section {
+            margin-top: 70px;
             width: 100%;
-            border-collapse: collapse;
           }
           .signature-cell {
-            width: 50%;
+            width: 100%;
             text-align: center;
             vertical-align: bottom;
-            font-size: 10pt;
+            font-size: 12pt;
           }
         </style>
       </head>
       <body>
-        <div class="certificate-box" style="border: 4px double #1e3a8a; padding: 30px; background-color: #fafaf9; border-radius: 8px;">
-          <div class="header" style="text-align: center; margin-bottom: 40px;">
+        <div class="certificate-box" style="border: 6px solid #94a3b8; padding: 60px; background-color: #ffffff;">
+          <div class="header" style="text-align: center; margin-bottom: 30px;">
             ${customLogo ? `
-              <div style="margin-bottom: 15px; text-align: center;">
-                <img src="${customLogo}" width="65" height="65" style="max-height: 65px; max-width: 65px; object-fit: contain; display: block; margin: 0 auto;" />
+              <div style="margin-bottom: 25px; text-align: center;">
+                <img src="${customLogo}" width="100" height="100" style="max-height: 100px; max-width: 100px; object-fit: contain; display: block; margin: 0 auto;" />
               </div>
             ` : ''}
-            <h1 class="title" style="font-size: 18pt; font-weight: bold; color: #1e3a8a; text-transform: uppercase;">CERTIFICADO DE CUMPLIMIENTO</h1>
-            <p class="subtitle" style="font-size: 12pt; font-weight: bold; color: #475569; margin-bottom: 20px;">EVALUACIÓN DE DESEMPEÑO DOCENTE - DECRETO 1278</p>
+            <h1 class="title" style="font-size: 26pt; font-weight: bold; color: #0f172a; text-transform: uppercase; margin-bottom: 15px;">CERTIFICADO DE CUMPLIMIENTO</h1>
+            <p class="subtitle" style="font-size: 14pt; font-weight: bold; color: #475569; margin-bottom: 10px;">EVALUACIÓN DE DESEMPEÑO DOCENTE - DECRETO 1278</p>
+            <p class="body-text" style="font-size: 14pt; text-align: center; margin-bottom: 30px; line-height: 1.5; color: #333;">
+              La rectoría y el comité de evaluación de la <span class="highlight" style="font-weight: bold; color: #1e3a8a;">${evalDoc.lugarConcertacion || institutionName}</span>
+            </p>
           </div>
           
-          <p class="body-text" style="font-size: 11pt; text-align: justify; margin-bottom: 20px;">
-            La rectoría y el comité de evaluación de la <span class="highlight" style="font-weight: bold; color: #1e3a8a;">${evalDoc.lugarConcertacion || institutionName}</span> hace constar que el(la) docente:
-          </p>
+          <div style="text-align: center; margin: 30px 0;">
+             <div style="display: inline-block; border-left: 3px solid #0f172a; padding-left: 15px;">
+                <p style="font-size: 20pt; font-weight: 900; color: #0f172a; margin: 0; line-height: 1; letter-spacing: 1px;">HACE CONSTAR</p>
+             </div>
+             <p style="font-size: 14pt; margin-top: 10px; color: #333;">que el(la) docente:</p>
+          </div>
           
-          <p style="text-align: center; font-size: 14pt; font-weight: bold; margin: 20px 0; color: #0f172a;">
+          <p class="teacher-name" style="text-align: center; font-size: 24pt; font-weight: bold; margin: 30px 0; color: #2563eb; text-transform: uppercase;">
             ${teacher.nombre.toUpperCase()}
           </p>
           
-          <p class="body-text" style="font-size: 11pt; text-align: center; margin-bottom: 20px;">
-            Identificado(a) con Cédula de Ciudadanía No. <span class="highlight" style="font-weight: bold; color: #1e3a8a;">${teacher.cedula}</span>, quien se desempeña en el cargo de <span class="highlight" style="font-weight: bold; color: #1e3a8a;">${teacher.cargo}</span> en la sede <span class="highlight" style="font-weight: bold; color: #1e3a8a;">${teacher.sedeTrabajo}</span>.
+          <p class="body-text" style="font-size: 14pt; text-align: justify; margin-bottom: 40px; line-height: 1.6; color: #333;">
+            Identificado(a) con Cédula de Ciudadanía No. <span class="highlight" style="font-weight: bold; color: #1e3a8a;">${teacher.cedula}</span>, quien se desempeña en el cargo de <span class="highlight" style="font-weight: bold; color: #1e3a8a;">${teacher.cargo}</span> en la sede <span class="highlight" style="font-weight: bold; color: #1e3a8a;">${teacher.sedeTrabajo}</span>. ${textoCumplimiento}
           </p>
           
-          <p class="body-text" style="font-size: 11pt; text-align: justify; margin-bottom: 20px;">
-            Ha reportado, sustentado y allegado a conformidad el total de las evidencias físicas e informes requeridos para soportar las competencias funcionales y comportamentales concertadas correspondientes al <span class="highlight" style="font-weight: bold; color: #1e3a8a;">SEGUIMIENTO ${evalDoc.periodo}</span>. Tras la exhaustiva revisión de la carpeta de evidencias y/o el portafolio consolidado, el docente ha obtenido la aprobación oficial del evaluador directivo, dando cumplimiento satisfactorio a sus compromisos laborales.
+          <p class="body-text" style="font-size: 13pt; font-style: italic; text-align: center; margin-top: 50px; color: #475569;">
+            Dado en constancia el día ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}.
           </p>
           
-          <p class="body-text" style="font-size: 11pt; font-style: italic; text-align: center; margin-top: 30px;">
-            Se expide el presente certificado el día ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}.
-          </p>
-          
-          <table class="signature-section" style="margin-top: 40px; border:none; width:100%; border-collapse: collapse;">
+          <table class="signature-section" style="margin-top: 80px; border:none; width:100%; border-collapse: collapse;">
             <tr style="border:none;">
-              <td class="signature-cell" style="border:none; width: 50%; text-align: center; font-size: 10pt; vertical-align: top; padding: 10px;">
+              <td class="signature-cell" style="border:none; width: 100%; text-align: center; font-size: 12pt; vertical-align: top; padding: 10px;">
                 ${activeRectorSignature ? `
-                  <div style="margin: 0 auto 10px auto; min-height: 55px; text-align: center;">
-                    <img src="${activeRectorSignature}" width="145" height="50" style="max-height: 50px; max-width: 145px; object-fit: contain; display: block; margin: 0 auto;" />
+                  <div style="margin: 0 auto 15px auto; min-height: 70px; text-align: center;">
+                    <img src="${activeRectorSignature}" width="200" height="70" style="max-height: 70px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto;" />
                   </div>
                 ` : evalDoc.estado === 'Aprobado' ? `
-                  <div style="border: 1pt dashed #047857; background-color: #f0fdf4; padding: 8px; text-align: left; font-family: 'Courier New', monospace; font-size: 8pt; color: #047857; margin: 0 auto 10px auto; width: 240px; line-height: 1.3;">
-                    <b>✓ RECTORÍA - FIRMADO DIGITAL</b><br/>
+                  <div style="border: 2pt dashed #047857; background-color: #f0fdf4; padding: 12px; text-align: center; font-family: 'Courier New', monospace; font-size: 10pt; color: #047857; margin: 0 auto 15px auto; width: 300px; line-height: 1.4;">
+                    <b>✓ RECTORÍA - FIRMADO DIGITALMENTE</b><br/>
                     <b>Sello:</b> CERTIFICADO DE CUMPLIMIENTO<br/>
                     <b>Verif:</b> CERT-VAL-1278-${evalDoc.id}
                   </div>
-                ` : '<br/><br/><br/>'}
-                _______________________________<br/>
-                <b>${evalDoc.evaluadorNombre || 'Rector / Coordinador'}</b><br/>
-                Evaluador Directivo
-              </td>
-              <td class="signature-cell" style="border:none; width: 50%; text-align: center; font-size: 10pt; vertical-align: top; padding: 10px;">
-                ${teacher.firmaDocente ? `
-                  <div style="margin: 0 auto 10px auto; min-height: 55px; text-align: center;">
-                    <img src="${teacher.firmaDocente}" width="145" height="50" style="max-height: 50px; max-width: 145px; object-fit: contain; display: block; margin: 0 auto;" />
-                  </div>
-                ` : teacher.firmaDocente || evalDoc.estado === 'Aprobado' ? `
-                  <div style="border: 1pt dashed #2563eb; background-color: #f0f9ff; padding: 8px; text-align: left; font-family: 'Courier New', monospace; font-size: 8pt; color: #1d4ed8; margin: 0 auto 10px auto; width: 240px; line-height: 1.3;">
-                    <b>✓ DOCENTE - FIRMADO DIGITAL</b><br/>
-                    <b>Sello:</b> CERTIFICADO DE CUMPLIMIENTO<br/>
-                    <b>Verif:</b> CERT-DOC-1278-${evalDoc.id}
-                  </div>
-                ` : '<br/><br/><br/>'}
-                _______________________________<br/>
-                <b>${teacher.nombre}</b><br/>
-                Docente Evaluado
+                ` : '<br/><br/><br/><br/>'}
+                <div style="border-top: 1px solid #333; width: 300px; margin: 0 auto; padding-top: 10px;">
+                  <b>${evalDoc.evaluadorNombre || 'Rector / Coordinador'}</b><br/>
+                  <span style="color: #475569; font-size: 11pt;">Evaluador Directivo</span>
+                </div>
               </td>
             </tr>
           </table>
@@ -4059,7 +4085,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => handleExportWordModelFormat(currentTeacher!)}
+            onClick={() => handleExportWordModelFormat(currentTeacher!, selectedPeriod)}
             className="mt-3 py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm shadow-emerald-600/10 cursor-pointer"
           >
             <Download className="w-4 h-4" />
@@ -5320,6 +5346,21 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                   <Download className="w-3.5 h-3.5" />
                   Evidencias (Anexo 2)
                 </button>
+                {activeEvaluacion?.estado === 'Aprobado' && (
+                  <button
+                    onClick={() => {
+                      if (activeEvaluacion) {
+                        setCertificateModalData({ evalDoc: activeEvaluacion, teacher: currentTeacher! });
+                        setCertificatePeriod(String(activeEvaluacion.periodo));
+                        setShowCertificateModal(true);
+                      }
+                    }}
+                    className="py-1.5 px-3 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-teal-200"
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    Certificado de Cumplimiento
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -6310,7 +6351,13 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleExportCertificateWord(activeEvaluacion, currentTeacher!)}
+                    onClick={() => {
+                      if (activeEvaluacion) {
+                        setCertificateModalData({ evalDoc: activeEvaluacion, teacher: currentTeacher! });
+                        setCertificatePeriod(String(activeEvaluacion.periodo));
+                        setShowCertificateModal(true);
+                      }
+                    }}
                     className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl uppercase tracking-widest text-[10px] shadow-md shadow-emerald-500/10 transition-colors flex items-center gap-2 shrink-0 cursor-pointer"
                   >
                     <Award className="w-4 h-4" />
@@ -6578,7 +6625,11 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     <button
                       onClick={() => {
                         const emp = docentesEvaluacion.find(e => e.cedula === selectedEvalForInspection.cedula);
-                        if (emp) handleExportCertificateWord(selectedEvalForInspection, emp);
+                        if (emp) {
+                          setCertificateModalData({ evalDoc: selectedEvalForInspection, teacher: emp });
+                          setCertificatePeriod(String(selectedEvalForInspection.periodo));
+                          setShowCertificateModal(true);
+                        }
                       }}
                       className="py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-indigo-200"
                     >
@@ -8140,6 +8191,69 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
 
       {/* SELECTION MODAL */}
       <AnimatePresence>
+        {showCertificateModal && certificateModalData && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden flex flex-col"
+            >
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <Award className="w-5 h-5 text-teal-600" />
+                  <h3 className="font-extrabold text-slate-800 text-sm">Certificado de Cumplimiento</h3>
+                </div>
+                <button
+                  onClick={() => setShowCertificateModal(false)}
+                  className="p-1 hover:bg-slate-200 rounded-lg text-slate-400 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 flex flex-col gap-4">
+                <p className="text-sm text-slate-600">
+                  ¿Qué número de seguimiento desea certificar en el documento?
+                </p>
+                <select
+                  value={certificatePeriod}
+                  onChange={(e) => setCertificatePeriod(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 text-sm font-medium outline-none transition-all cursor-pointer"
+                >
+                  {evaluaciones
+                    .filter(ev => ev.cedula === certificateModalData.teacher.cedula && ev.estado === 'Aprobado')
+                    .sort((a, b) => Number(a.periodo) - Number(b.periodo))
+                    .map(ev => {
+                      let label = `S${ev.periodo}`;
+                      if (String(ev.periodo) === '1') label = 'S1 - Anexos 2 y 5 (Primer Trimestre)';
+                      if (String(ev.periodo) === '2') label = 'S2 - Portafolio (Primer Semestre)';
+                      if (String(ev.periodo) === '3') label = 'S3 - Portafolio (Segundo Semestre)';
+                      if (String(ev.periodo) === '4') label = 'S4 - Anexo 6 (Final)';
+                      return <option key={ev.id} value={String(ev.periodo)}>{label}</option>;
+                    })}
+                </select>
+                <div className="flex gap-3 mt-2">
+                  <button
+                    onClick={() => setShowCertificateModal(false)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleExportCertificateWord(certificateModalData.evalDoc, certificateModalData.teacher, certificatePeriod);
+                      setShowCertificateModal(false);
+                    }}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-teal-600 text-white font-bold text-sm hover:bg-teal-700 shadow-md shadow-teal-500/20 transition-all cursor-pointer"
+                  >
+                    Descargar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {evalsForReviewSelection && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div
