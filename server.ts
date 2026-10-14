@@ -314,6 +314,7 @@ async function ensureDbTables() {
         notas JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      ALTER TABLE alvernia_certificados ADD COLUMN IF NOT EXISTS fecha_elaboracion TEXT;
     `);
 
     // Create alvernia_certificados_pama table

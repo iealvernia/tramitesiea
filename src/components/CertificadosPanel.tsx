@@ -37,6 +37,7 @@ interface StudentCertificado {
   grado: string;
   jornada: string;
   comportamiento?: string;
+  fecha_elaboracion?: string;
   notas: Record<string, NotaDetalle>;
   created_at?: string;
 }
@@ -51,17 +52,31 @@ const MATERIAS_PREDEFINIDAS = [
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
 export default function CertificadosPanel({ hasPermission }: { hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean }) {
-  const [students, setStudents] = useState<StudentCertificado[]>([]);
+  const currentYearNum = new Date().getFullYear();
+  const currentYearStr = currentYearNum.toString();
+
+  const [allCertificados, setAllCertificados] = useState<StudentCertificado[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorErrorMsg] = useState<string | null>(null);
 
-  // Filters
-  const [selectedAnio, setSelectedAnio] = useState('2025');
+  // Filters - Defaults to 'TODOS' so all students show in the list, or allow filtering by year
+  const [selectedAnio, setSelectedAnio] = useState<string>('TODOS');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [availableYears, setAvailableYears] = useState<string[]>(() => {
+    const years: string[] = [];
+    for (let y = currentYearNum + 1; y >= 2020; y--) {
+      years.push(y.toString());
+    }
+    return years;
+  });
 
   // Modal / Form state
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [formAnio, setFormAnio] = useState<string>(currentYearStr);
+  const [formFechaElaboracion, setFormFechaElaboracion] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
   // Excel Importer modal states
   const [showImportModal, setShowImportModal] = useState(false);
@@ -434,8 +449,23 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
       const res = await fetch('/api/certificados');
       const json = await res.json();
       if (json.error) throw new Error(json.error);
-      const data = (json.data || []).filter((s: any) => s.anio === selectedAnio).sort((a: any, b: any) => a.nombre.localeCompare(b.nombre));
-      setStudents(data);
+
+      const list: StudentCertificado[] = (json.data || []).sort((a: any, b: any) => {
+        if (a.anio !== b.anio) {
+          return Number(b.anio || 0) - Number(a.anio || 0);
+        }
+        return (a.nombre || '').localeCompare(b.nombre || '');
+      });
+
+      setAllCertificados(list);
+
+      // Collect all distinct years from DB and merge with dynamic list
+      const dbYears: string[] = list.map((s: any) => s.anio?.toString()).filter(Boolean);
+      setAvailableYears(prev => {
+        const set = new Set([...prev, ...dbYears]);
+        return Array.from(set).sort((a, b) => Number(b) - Number(a));
+      });
+
       setErrorErrorMsg(null);
     } catch (err: any) {
       console.error('Error fetching certificados:', err);
@@ -447,7 +477,7 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
 
   useEffect(() => {
     loadData();
-  }, [selectedAnio]);
+  }, []);
 
   // Handle adding a course row
   const addNotaRow = () => {
@@ -472,6 +502,8 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
   // Open modal
   const handleOpenAdd = () => {
     setEditId(null);
+    setFormAnio(selectedAnio !== 'TODOS' ? selectedAnio : currentYearStr);
+    setFormFechaElaboracion(new Date().toISOString().split('T')[0]);
     setFormName('');
     setFormDocumento('');
     setFormTipoDoc('TI');
@@ -484,6 +516,9 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
 
   const handleOpenEdit = (student: StudentCertificado) => {
     setEditId(student.id || null);
+    setFormAnio(student.anio || currentYearStr);
+    const fechaElab = student.fecha_elaboracion || (student.created_at ? student.created_at.substring(0, 10) : new Date().toISOString().split('T')[0]);
+    setFormFechaElaboracion(fechaElab);
     setFormName(student.nombre);
     setFormDocumento(student.documento);
     setFormTipoDoc(student.tipo_documento || 'TI');
@@ -508,7 +543,7 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
       const res = await fetch(`/api/certificados/${id}`, { method: 'DELETE' });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
-      setStudents(prev => prev.filter(s => s.id !== id));
+      setAllCertificados(prev => prev.filter(s => s.id !== id));
       alert('Registro eliminado exitosamente.');
     } catch (err: any) {
       alert('Error: ' + err.message);
@@ -516,19 +551,24 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
   };
 
   const handleClearAllYear = async () => {
+    if (selectedAnio === 'TODOS') {
+      alert('Por favor seleccione un año específico en el filtro para limpiar los certificados de ese periodo.');
+      return;
+    }
     if (!confirm(`¿Está totalmente seguro de borrar TODOS los certificados del año ${selectedAnio}? Esta acción es irreversible.`)) return;
     try {
-      const res = await fetch('/api/certificados');
-      const json = await res.json();
-      const allStudents = json.data || [];
-      const toDelete = allStudents.filter((s: any) => s.anio === selectedAnio);
+      setLoading(true);
+      const toDelete = allCertificados.filter(s => s.anio === selectedAnio);
       for (const s of toDelete) {
-        await fetch(`/api/certificados/${s.id}`, { method: 'DELETE' });
+        if (s.id) {
+          await fetch(`/api/certificados/${s.id}`, { method: 'DELETE' });
+        }
       }
-      alert('Base limpiada correctamente.');
-      loadData();
+      alert(`Certificados del año ${selectedAnio} eliminados correctamente.`);
+      await loadData();
     } catch (err: any) {
       alert('Error: ' + err.message);
+      setLoading(false);
     }
   };
 
@@ -633,8 +673,12 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
       }
     });
 
-    const payload = {
-      anio: selectedAnio,
+    const targetAnio = formAnio.trim() || currentYearStr;
+    const targetFecha = formFechaElaboracion || new Date().toISOString().split('T')[0];
+
+    const payload: any = {
+      anio: targetAnio,
+      fecha_elaboracion: targetFecha,
       nombre: formName.trim().toUpperCase(),
       documento: formDocumentoScale(formDocumento.trim()),
       tipo_documento: formTipoDoc,
@@ -646,7 +690,7 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
 
     try {
       if (editId) {
-        (payload as any).id = editId;
+        payload.id = editId;
         const res = await fetch('/api/certificados', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -666,7 +710,8 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
         alert('Estudiante guardado exitosamente.');
       }
       setShowModal(false);
-      loadData();
+      setSelectedAnio(targetAnio);
+      await loadData();
     } catch (err: any) {
       alert('Error guardando en Base de Datos: ' + err.message);
     }
@@ -745,7 +790,19 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
   const handlePrint = async (s: StudentCertificado) => {
     try {
       const doc = new jsPDF();
-      const fecha = new Date();
+      // Determine elaboration date: student's fecha_elaboracion or current date
+      let fecha = new Date();
+      if (s.fecha_elaboracion && s.fecha_elaboracion.includes('-')) {
+        const parts = s.fecha_elaboracion.split('-');
+        if (parts.length === 3) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) - 1;
+          const d = parseInt(parts[2], 10);
+          if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+            fecha = new Date(y, m, d);
+          }
+        }
+      }
       const dia = fecha.getDate();
       const mes = MESES[fecha.getMonth()];
       const anioHoy = fecha.getFullYear();
@@ -903,16 +960,46 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
     }
   };
 
-  // Filter students by search bar query
+  // Year counts for fast display in dropdown
+  const yearCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allCertificados.forEach(s => {
+      const y = s.anio?.toString();
+      if (y) {
+        counts[y] = (counts[y] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [allCertificados]);
+
+  // Filter students by selected year and search bar query
   const filteredStudents = useMemo(() => {
-    if (!searchQuery.trim()) return students;
-    const query = searchQuery.toLowerCase();
-    return students.filter(s => 
-      s.nombre.toLowerCase().includes(query) || 
-      s.documento.includes(query) || 
-      (s.grado && s.grado.toLowerCase().includes(query))
-    );
-  }, [students, searchQuery]);
+    let result = allCertificados;
+    if (selectedAnio !== 'TODOS') {
+      result = result.filter(s => s.anio?.toString() === selectedAnio);
+    }
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(s => 
+        (s.nombre && s.nombre.toLowerCase().includes(query)) || 
+        (s.documento && s.documento.includes(query)) || 
+        (s.grado && s.grado.toLowerCase().includes(query)) ||
+        (s.anio && s.anio.toString().includes(query))
+      );
+    }
+    return result;
+  }, [allCertificados, selectedAnio, searchQuery]);
+
+  // Reset page when filter or page size changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedAnio, searchQuery, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const paginatedStudents = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredStudents.slice(start, start + pageSize);
+  }, [filteredStudents, currentPage, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -952,10 +1039,16 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
 
             <button
               onClick={handleClearAllYear}
-              className="bg-rose-950/20 hover:bg-rose-950/40 text-rose-300 hover:text-white border border-rose-900/30 font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-2 transition-colors cursor-pointer"
+              disabled={selectedAnio === 'TODOS'}
+              className={`font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-2 transition-colors cursor-pointer ${
+                selectedAnio === 'TODOS'
+                  ? 'bg-slate-800/40 text-slate-500 border border-slate-700 cursor-not-allowed opacity-50'
+                  : 'bg-rose-950/20 hover:bg-rose-950/40 text-rose-300 hover:text-white border border-rose-900/30'
+              }`}
+              title={selectedAnio === 'TODOS' ? 'Seleccione un año específico para limpiar registros' : `Limpiar Base (${selectedAnio})`}
             >
               <Trash2 className="w-4 h-4 text-rose-400" />
-              Limpiar Base ({selectedAnio})
+              Limpiar Base {selectedAnio !== 'TODOS' ? `(${selectedAnio})` : ''}
             </button>
           </div>
         </div>
@@ -964,27 +1057,32 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
       {/* Toolbar Selector & Filters */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
         <div>
-          <label className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider mb-1.5 block">Seleccionar Año Lectivo</label>
+          <label className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider mb-1.5 block">
+            Seleccionar Año Lectivo
+          </label>
           <select
             value={selectedAnio}
             onChange={e => setSelectedAnio(e.target.value)}
-            className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500 font-extrabold text-slate-800 bg-white"
+            className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500 font-extrabold text-slate-800 bg-white cursor-pointer"
           >
-            <option value="2022">2022</option>
-            <option value="2023">2023</option>
-            <option value="2024">2024</option>
-            <option value="2025">2025</option>
-            <option value="2026">2026</option>
+            <option value="TODOS">Todos los Años ({allCertificados.length} total)</option>
+            {availableYears.map(year => (
+              <option key={year} value={year}>
+                Año {year} {yearCounts[year] ? `(${yearCounts[year]} estudiantes)` : '(0)'}
+              </option>
+            ))}
           </select>
         </div>
 
         <div className="md:col-span-2">
-          <label className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider mb-1.5 block">Buscar Estudiante (Nombre, Identificación o Grado)</label>
+          <label className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider mb-1.5 block">
+            Buscar Estudiante (Nombre, Identificación, Grado o Año)
+          </label>
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Escriba documento, apellido o grado académico..."
+              placeholder="Escriba documento, apellido, grado académico o año..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500"
@@ -998,7 +1096,7 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
         {loading ? (
           <div className="p-12 text-center text-slate-500 font-bold">
             <div className="animate-spin inline-block w-8 h-8 border-4 border-emerald-550 border-t-transparent rounded-full mb-3"></div>
-            <p className="text-xs">Consultando estudiantes calificados ({selectedAnio}) de la Base de Datos...</p>
+            <p className="text-xs">Cargando base de datos de certificados ({allCertificados.length} cargados)...</p>
           </div>
         ) : errorMsg ? (
           <div className="p-12 text-center text-rose-600 bg-rose-50/50">
@@ -1009,76 +1107,161 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
         ) : filteredStudents.length === 0 ? (
           <div className="p-12 text-center text-slate-400">
             <Award className="w-10 h-10 mx-auto mb-3 opacity-30 text-slate-500" />
-            <p className="font-bold text-xs">No hay certificados registrados para el año {selectedAnio}</p>
-            <p className="text-[10px] mt-1 text-slate-500">Pruebe agregando un registro de notas y calificaciones en este periodo.</p>
+            <p className="font-bold text-xs">
+              {selectedAnio === 'TODOS' 
+                ? 'No se encontraron certificados registrados' 
+                : `No hay certificados registrados para el año ${selectedAnio}`}
+            </p>
+            <p className="text-[10px] mt-1 text-slate-500">Pruebe agregando un nuevo certificado o ajustando su búsqueda.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-xs text-slate-700 font-medium">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-                  <th className="p-4">Estudiante / Identificación</th>
-                  <th className="p-4">Grado y Jornada</th>
-                  <th className="p-4">Materias / Áreas Evaluadas</th>
-                  <th className="p-4 text-center">Evaluación Social</th>
-                  <th className="p-4 text-center">Constancia Oficial</th>
-                  <th className="p-4 text-center">Procedimiento</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-150/70">
-                {filteredStudents.map(student => {
-                  const materiasEval = student.notas ? Object.keys(student.notas).length : 0;
-                  return (
-                    <tr key={student.id} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="p-4">
-                        <p className="font-extrabold text-slate-900 text-[11px] leading-tight">{student.nombre}</p>
-                        <span className="font-mono text-[9px] text-slate-400 font-bold uppercase tracking-wide">
-                          {student.tipo_documento || 'CC'}-{student.documento}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <p className="font-extrabold text-slate-800">{student.grado}</p>
-                        <span className="text-[9px] text-slate-400 uppercase font-black tracking-wide">{student.jornada || 'ÚNICA'}</span>
-                      </td>
-                      <td className="p-4 font-semibold">
-                        <span className="bg-emerald-50 text-emerald-800 border border-emerald-100 px-2 py-0.5 rounded-full text-[10px]">
-                          {materiasEval} Materias Registradas
-                        </span>
-                      </td>
-                      <td className="p-4 text-center font-extrabold text-amber-700">
-                        {student.comportamiento || 'NO REGISTRADO'}
-                      </td>
-                      <td className="p-4 text-center">
-                        <button
-                          onClick={() => handlePrint(student)}
-                          className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-[10px] py-1.5 px-3 rounded-lg border border-emerald-200 inline-flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          Generar Certificado
-                        </button>
-                      </td>
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
+          <div>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs text-slate-700 font-medium">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                    <th className="p-4 text-center">Año Lectivo</th>
+                    <th className="p-4">Estudiante / Identificación</th>
+                    <th className="p-4">Grado y Jornada</th>
+                    <th className="p-4">Materias / Áreas Evaluadas</th>
+                    <th className="p-4 text-center">Evaluación Social</th>
+                    <th className="p-4 text-center">Constancia Oficial</th>
+                    <th className="p-4 text-center">Procedimiento</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-150/70">
+                  {paginatedStudents.map(student => {
+                    const materiasEval = student.notas ? Object.keys(student.notas).length : 0;
+                    return (
+                      <tr key={student.id} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="p-4 text-center">
+                          <span className="bg-emerald-50 text-emerald-800 font-black px-2.5 py-1 rounded-lg border border-emerald-200 text-[11px] font-mono">
+                            {student.anio || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <p className="font-extrabold text-slate-900 text-[11px] leading-tight">{student.nombre}</p>
+                          <span className="font-mono text-[9px] text-slate-400 font-bold uppercase tracking-wide">
+                            {student.tipo_documento || 'CC'}-{student.documento}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <p className="font-extrabold text-slate-800">{student.grado}</p>
+                          <span className="text-[9px] text-slate-400 uppercase font-black tracking-wide">{student.jornada || 'ÚNICA'}</span>
+                        </td>
+                        <td className="p-4 font-semibold">
+                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-100 px-2 py-0.5 rounded-full text-[10px]">
+                            {materiasEval} Materias Registradas
+                          </span>
+                        </td>
+                        <td className="p-4 text-center font-extrabold text-amber-700">
+                          {student.comportamiento || 'NO REGISTRADO'}
+                        </td>
+                        <td className="p-4 text-center">
                           <button
-                            onClick={() => handleOpenEdit(student)}
-                            className="bg-slate-50 hover:bg-slate-150 border border-slate-205 text-slate-700 p-1.5 rounded-lg cursor-pointer"
-                            title="Editar Calificaciones"
+                            onClick={() => handlePrint(student)}
+                            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-[10px] py-1.5 px-3 rounded-lg border border-emerald-200 inline-flex items-center gap-1 cursor-pointer transition-colors"
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Printer className="w-3.5 h-3.5" />
+                            Generar Certificado
                           </button>
-                          <button
-                            onClick={() => student.id && handleDelete(student.id)}
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-700 p-1.5 rounded-lg border border-rose-200 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleOpenEdit(student)}
+                              className="bg-slate-50 hover:bg-slate-150 border border-slate-205 text-slate-700 p-1.5 rounded-lg cursor-pointer"
+                              title="Editar Calificaciones"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => student.id && handleDelete(student.id)}
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-700 p-1.5 rounded-lg border border-rose-200 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="bg-slate-50 border-t border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-slate-600 font-semibold flex items-center gap-2">
+                <span>
+                  Mostrando <strong className="text-slate-900">{filteredStudents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> a <strong className="text-slate-900">{Math.min(currentPage * pageSize, filteredStudents.length)}</strong> de <strong className="text-slate-900">{filteredStudents.length}</strong> estudiantes
+                </span>
+                {selectedAnio !== 'TODOS' && (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
+                    Año {selectedAnio}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <span className="text-[11px] font-bold">Por pág:</span>
+                  <select
+                    value={pageSize}
+                    onChange={e => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white text-slate-700 font-bold focus:outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    title="Primera página"
+                  >
+                    ⏮
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    title="Página anterior"
+                  >
+                    ◀ Ant
+                  </button>
+
+                  <span className="px-3 py-1 text-xs font-bold text-slate-800 bg-white border border-slate-300 rounded-lg">
+                    {currentPage} / {totalPages}
+                  </span>
+
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage >= totalPages}
+                    className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    title="Página siguiente"
+                  >
+                    Sig ▶
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage >= totalPages}
+                    className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    title="Última página"
+                  >
+                    ⏭
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -1103,6 +1286,31 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
               
               {/* Personal Student details */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Año Lectivo *</label>
+                  <input
+                    type="number"
+                    min={1990}
+                    max={2040}
+                    value={formAnio}
+                    onChange={e => setFormAnio(e.target.value)}
+                    required
+                    className="w-full p-2 border rounded-xl text-xs bg-white text-emerald-950 font-black font-mono focus:outline-none focus:border-emerald-500"
+                    placeholder="Ej. 2025"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Fecha de Elaboración *</label>
+                  <input
+                    type="date"
+                    value={formFechaElaboracion}
+                    onChange={e => setFormFechaElaboracion(e.target.value)}
+                    required
+                    className="w-full p-2 border rounded-xl text-xs bg-white text-slate-800 font-bold focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Tipo Documento</label>
                   <select
@@ -1186,7 +1394,7 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
                   </select>
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="md:col-span-4">
                   <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Comportamiento Social / Disciplina</label>
                   <select
                     value={formComportamiento}
