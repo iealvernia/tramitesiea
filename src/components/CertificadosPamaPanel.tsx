@@ -76,13 +76,15 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
   const currentYearNum = new Date().getFullYear();
   const currentYearStr = currentYearNum.toString();
 
-  const [students, setStudents] = useState<StudentPama[]>([]);
+  const [allStudents, setAllStudents] = useState<StudentPama[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorErrorMsg] = useState<string | null>(null);
 
-  // Filters - Defaults dynamically to current year (2026, 2027, etc.)
-  const [selectedAnio, setSelectedAnio] = useState(currentYearStr);
+  // Filters - Defaults to 'TODOS' so all students show in the list, or allow filtering by year
+  const [selectedAnio, setSelectedAnio] = useState<string>('TODOS');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [availableYears, setAvailableYears] = useState<string[]>(() => {
     const years: string[] = [];
     for (let y = currentYearNum + 1; y >= 2020; y--) {
@@ -122,15 +124,22 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
       const json = await res.json();
       if (json.error) throw new Error(json.error);
 
+      const list: StudentPama[] = (json.data || []).sort((a: any, b: any) => {
+        if (a.anio !== b.anio) {
+          return Number(b.anio || 0) - Number(a.anio || 0);
+        }
+        return (a.nombre || '').localeCompare(b.nombre || '');
+      });
+
+      setAllStudents(list);
+
       // Collect all distinct years from DB and merge with default dynamic range
-      const dbYears: string[] = (json.data || []).map((s: any) => s.anio?.toString()).filter(Boolean);
+      const dbYears: string[] = list.map((s: any) => s.anio?.toString()).filter(Boolean);
       setAvailableYears(prev => {
         const set = new Set([...prev, ...dbYears]);
         return Array.from(set).sort((a, b) => Number(b) - Number(a));
       });
 
-      const data = (json.data || []).filter((s: any) => s.anio === selectedAnio).sort((a: any, b: any) => a.nombre.localeCompare(b.nombre));
-      setStudents(data);
       setErrorErrorMsg(null);
     } catch (err: any) {
       console.error('Error fetching certificados_pama:', err);
@@ -142,13 +151,13 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
 
   useEffect(() => {
     loadData();
-  }, [selectedAnio]);
+  }, []);
 
   // Open modal
   const handleOpenAdd = () => {
     setEditId(null);
     setFormState({
-      anio: selectedAnio,
+      anio: selectedAnio !== 'TODOS' ? selectedAnio : currentYearStr,
       tipo_documento: 'TI',
       documento: '',
       nombre: '',
@@ -181,7 +190,7 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
       const res = await fetch(`/api/certificados-pama/${id}`, { method: 'DELETE' });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
-      setStudents(prev => prev.filter(s => s.id !== id));
+      setAllStudents(prev => prev.filter(s => s.id !== id));
       alert('Registro eliminado exitosamente.');
     } catch (err: any) {
       alert('Error: ' + err.message);
@@ -189,19 +198,24 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
   };
 
   const handleClearAllYear = async () => {
+    if (selectedAnio === 'TODOS') {
+      alert('Por favor seleccione un año específico en el filtro para limpiar los certificados PAMA de ese periodo.');
+      return;
+    }
     if (!confirm(`¿Está totalmente seguro de borrar TODOS los certificados PAMA del año ${selectedAnio}? Esta acción es irreversible.`)) return;
     try {
-      const res = await fetch('/api/certificados-pama');
-      const json = await res.json();
-      const allStudents = json.data || [];
-      const toDelete = allStudents.filter((s: any) => s.anio === selectedAnio);
+      setLoading(true);
+      const toDelete = allStudents.filter(s => s.anio === selectedAnio);
       for (const s of toDelete) {
-        await fetch(`/api/certificados-pama/${s.id}`, { method: 'DELETE' });
+        if (s.id) {
+          await fetch(`/api/certificados-pama/${s.id}`, { method: 'DELETE' });
+        }
       }
-      alert('Base decertificados PAMA limpiada.');
-      loadData();
+      alert(`Base de certificados PAMA del año ${selectedAnio} limpiada correctamente.`);
+      await loadData();
     } catch (err: any) {
       alert('Error: ' + err.message);
+      setLoading(false);
     }
   };
 
@@ -235,7 +249,7 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'CertificadosPAMA');
     
-    XLSX.writeFile(workbook, `Reporte_PAMA_${selectedAnio}.xlsx`);
+    XLSX.writeFile(workbook, `Reporte_PAMA_${selectedAnio !== 'TODOS' ? selectedAnio : 'TODOS'}.xlsx`);
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -254,8 +268,10 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
       return;
     }
 
+    const targetAnio = formState.anio?.trim() || currentYearStr;
     const payload = {
       ...formState,
+      anio: targetAnio,
       nombre: formState.nombre.trim().toUpperCase(),
       documento: formState.documento.trim()
     };
@@ -282,7 +298,8 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
         alert('Estudiante PAMA guardado exitosamente.');
       }
       setShowModal(false);
-      loadData();
+      setSelectedAnio(targetAnio);
+      await loadData();
     } catch (err: any) {
       alert('Error guardando en Base de Datos: ' + err.message);
     }
@@ -613,15 +630,47 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
     }
   };
 
+  // Year counts for fast display in dropdown
+  const yearCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allStudents.forEach(s => {
+      const y = s.anio?.toString();
+      if (y) counts[y] = (counts[y] || 0) + 1;
+    });
+    return counts;
+  }, [allStudents]);
+
+  // Filter students by selected year and search bar query (by name, document, acta, etc.)
   const filteredStudents = useMemo(() => {
-    if (!searchQuery.trim()) return students;
-    const q = searchQuery.toLowerCase();
-    return students.filter(s => 
-      s.nombre.toLowerCase().includes(q) || 
-      s.documento.includes(q) ||
-      s.acta.includes(q)
-    );
-  }, [students, searchQuery]);
+    let result = allStudents;
+    if (selectedAnio !== 'TODOS') {
+      result = result.filter(s => s.anio?.toString() === selectedAnio);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(s => 
+        (s.nombre && s.nombre.toLowerCase().includes(q)) || 
+        (s.documento && s.documento.toLowerCase().includes(q)) ||
+        (s.acta && s.acta.toLowerCase().includes(q)) ||
+        (s.folio && s.folio.toLowerCase().includes(q)) ||
+        (s.libro && s.libro.toLowerCase().includes(q)) ||
+        (s.grado && s.grado.toLowerCase().includes(q)) ||
+        (s.anio && s.anio.toString().includes(q))
+      );
+    }
+    return result;
+  }, [allStudents, selectedAnio, searchQuery]);
+
+  // Reset page when filter or page size changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedAnio, searchQuery, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const paginatedStudents = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredStudents.slice(start, start + pageSize);
+  }, [filteredStudents, currentPage, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -660,10 +709,16 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
 
             <button
               onClick={handleClearAllYear}
-              className="bg-indigo-950/20 hover:bg-indigo-950/40 text-indigo-300 hover:text-white border border-indigo-900/30 font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-2 transition-colors cursor-pointer"
+              disabled={selectedAnio === 'TODOS'}
+              className={`font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-2 transition-colors cursor-pointer ${
+                selectedAnio === 'TODOS'
+                  ? 'bg-slate-800/40 text-slate-500 border border-slate-700 cursor-not-allowed opacity-50'
+                  : 'bg-indigo-950/20 hover:bg-indigo-950/40 text-indigo-300 hover:text-white border border-indigo-900/30'
+              }`}
+              title={selectedAnio === 'TODOS' ? 'Seleccione un año específico para limpiar registros' : `Limpiar Base PAMA (${selectedAnio})`}
             >
               <Trash2 className="w-4 h-4 text-indigo-400" />
-              Limpiar Base PAMA ({selectedAnio})
+              Limpiar Base PAMA {selectedAnio !== 'TODOS' ? `(${selectedAnio})` : ''}
             </button>
           </div>
         </div>
@@ -672,25 +727,32 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
       {/* Toolbar filters */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
         <div>
-          <label className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider mb-1.5 block">Seleccionar Año Lectivo</label>
+          <label className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider mb-1.5 block">
+            Seleccionar Año Lectivo
+          </label>
           <select
             value={selectedAnio}
             onChange={e => setSelectedAnio(e.target.value)}
             className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-sky-500 font-extrabold text-slate-800 bg-white cursor-pointer"
           >
+            <option value="TODOS">Todos los Años ({allStudents.length} total)</option>
             {availableYears.map(year => (
-              <option key={year} value={year}>{year}</option>
+              <option key={year} value={year}>
+                Año {year} {yearCounts[year] ? `(${yearCounts[year]} alumnos)` : '(0)'}
+              </option>
             ))}
           </select>
         </div>
 
         <div className="md:col-span-2">
-          <label className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider mb-1.5 block">Buscar alumno PAMA (Nombre, Documento, Acta)</label>
+          <label className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider mb-1.5 block">
+            Buscar alumno PAMA (Nombre, Documento, Acta o Año)
+          </label>
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar graduado PAMA..."
+              placeholder="Buscar por nombre, documento, acta, folio o año..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-sky-500"
@@ -704,7 +766,7 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
         {loading ? (
           <div className="p-12 text-center text-slate-500 font-bold">
             <div className="animate-spin inline-block w-8 h-8 border-4 border-sky-550 border-t-transparent rounded-full mb-3"></div>
-            <p className="text-xs">Consultando base PAMA ({selectedAnio}) de la Base de Datos...</p>
+            <p className="text-xs">Cargando base de datos de certificados PAMA ({allStudents.length} cargados)...</p>
           </div>
         ) : errorMsg ? (
           <div className="p-12 text-center text-rose-600 bg-rose-50/50">
@@ -715,73 +777,158 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
         ) : filteredStudents.length === 0 ? (
           <div className="p-12 text-center text-slate-400">
             <Award className="w-10 h-10 mx-auto mb-3 opacity-30 text-indigo-500" />
-            <p className="font-bold text-xs">No hay certificados PAMA registrados en el año {selectedAnio}</p>
-            <p className="text-[10px] mt-1 text-slate-500">Pruebe agregando un registro en este periodo escolar.</p>
+            <p className="font-bold text-xs">
+              {selectedAnio === 'TODOS' 
+                ? 'No se encontraron certificados PAMA registrados' 
+                : `No hay certificados PAMA registrados en el año ${selectedAnio}`}
+            </p>
+            <p className="text-[10px] mt-1 text-slate-500">Pruebe agregando un nuevo registro o ajustando su búsqueda.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-xs text-slate-700 font-medium">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-                  <th className="p-4">Estudiante / Identificación</th>
-                  <th className="p-4">Grado y Jornada</th>
-                  <th className="p-4">Fecha de Grado</th>
-                  <th className="p-4">Acta / Folio / Libro</th>
-                  <th className="p-3 text-center">Ficha PAMA</th>
-                  <th className="p-3 text-center">Gestión</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-150/70">
-                {filteredStudents.map(student => {
-                  return (
-                    <tr key={student.id} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="p-4">
-                        <p className="font-extrabold text-slate-900 text-[11px] leading-tight">{student.nombre}</p>
-                        <span className="font-mono text-[9px] text-slate-400 font-bold uppercase tracking-wide">
-                          {student.tipo_documento || 'CC'}-{student.documento}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <p className="font-extrabold text-slate-800">{student.grado}</p>
-                        <span className="text-[9px] text-slate-400 uppercase font-black tracking-wide">{student.jornada || 'ÚNICA'}</span>
-                      </td>
-                      <td className="p-4 font-semibold text-slate-600">
-                        {student.fecha_grado}
-                      </td>
-                      <td className="p-4">
-                        <p className="font-mono text-[10px] font-bold text-slate-700">Acta: {student.acta}</p>
-                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide">Folio: {student.folio} | Libro: {student.libro}</span>
-                      </td>
-                      <td className="p-3 text-center">
-                        <button
-                          onClick={() => handlePrint(student)}
-                          className="bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-[10px] py-1.5 px-3 rounded-lg border border-sky-200 inline-flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          Generar Acreditación
-                        </button>
-                      </td>
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
+          <div>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs text-slate-700 font-medium">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                    <th className="p-4 text-center">Año Lectivo</th>
+                    <th className="p-4">Estudiante / Identificación</th>
+                    <th className="p-4">Grado y Jornada</th>
+                    <th className="p-4">Fecha de Grado</th>
+                    <th className="p-4">Acta / Folio / Libro</th>
+                    <th className="p-3 text-center">Ficha PAMA</th>
+                    <th className="p-3 text-center">Gestión</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-150/70">
+                  {paginatedStudents.map(student => {
+                    return (
+                      <tr key={student.id} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="p-4 text-center">
+                          <span className="bg-sky-50 text-sky-800 font-black px-2.5 py-1 rounded-lg border border-sky-200 text-[11px] font-mono">
+                            {student.anio || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <p className="font-extrabold text-slate-900 text-[11px] leading-tight">{student.nombre}</p>
+                          <span className="font-mono text-[9px] text-slate-400 font-bold uppercase tracking-wide">
+                            {student.tipo_documento || 'CC'}-{student.documento}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <p className="font-extrabold text-slate-800">{student.grado}</p>
+                          <span className="text-[9px] text-slate-400 uppercase font-black tracking-wide">{student.jornada || 'ÚNICA'}</span>
+                        </td>
+                        <td className="p-4 font-semibold text-slate-600">
+                          {student.fecha_grado}
+                        </td>
+                        <td className="p-4">
+                          <p className="font-mono text-[10px] font-bold text-slate-700">Acta: {student.acta}</p>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide">Folio: {student.folio} | Libro: {student.libro}</span>
+                        </td>
+                        <td className="p-3 text-center">
                           <button
-                            onClick={() => handleOpenEdit(student)}
-                            className="bg-slate-50 hover:bg-slate-150 border border-slate-205 text-slate-700 p-1.5 rounded-lg cursor-pointer"
+                            onClick={() => handlePrint(student)}
+                            className="bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-[10px] py-1.5 px-3 rounded-lg border border-sky-200 inline-flex items-center gap-1 cursor-pointer transition-colors"
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Printer className="w-3.5 h-3.5" />
+                            Generar Acreditación
                           </button>
-                          <button
-                            onClick={() => student.id && handleDelete(student.id)}
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-700 p-1.5 rounded-lg border border-rose-200 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className="p-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleOpenEdit(student)}
+                              className="bg-slate-50 hover:bg-slate-150 border border-slate-205 text-slate-700 p-1.5 rounded-lg cursor-pointer"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => student.id && handleDelete(student.id)}
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-700 p-1.5 rounded-lg border border-rose-200 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="bg-slate-50 border-t border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-slate-600 font-semibold flex items-center gap-2">
+                <span>
+                  Mostrando <strong className="text-slate-900">{filteredStudents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> a <strong className="text-slate-900">{Math.min(currentPage * pageSize, filteredStudents.length)}</strong> de <strong className="text-slate-900">{filteredStudents.length}</strong> estudiantes PAMA
+                </span>
+                {selectedAnio !== 'TODOS' && (
+                  <span className="text-[10px] bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full font-bold border border-sky-200">
+                    Año {selectedAnio}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <span className="text-[11px] font-bold">Por pág:</span>
+                  <select
+                    value={pageSize}
+                    onChange={e => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white text-slate-700 font-bold focus:outline-none focus:border-sky-500 cursor-pointer"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    title="Primera página"
+                  >
+                    ⏮
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    title="Página anterior"
+                  >
+                    ◀ Ant
+                  </button>
+
+                  <span className="px-3 py-1 text-xs font-bold text-slate-800 bg-white border border-slate-300 rounded-lg">
+                    {currentPage} / {totalPages}
+                  </span>
+
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage >= totalPages}
+                    className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    title="Página siguiente"
+                  >
+                    Sig ▶
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage >= totalPages}
+                    className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    title="Última página"
+                  >
+                    ⏭
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -813,6 +960,21 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Año Lectivo *</label>
+                    <input
+                      type="number"
+                      min={1990}
+                      max={2040}
+                      name="anio"
+                      value={formState.anio}
+                      onChange={handleFormChange}
+                      required
+                      className="w-full p-2 border rounded-xl text-xs bg-white text-sky-950 font-black font-mono focus:outline-none focus:border-sky-500"
+                      placeholder="Ej. 2026"
+                    />
+                  </div>
+
+                  <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Tipo Documento</label>
                     <select
                       name="tipo_documento"
@@ -836,6 +998,18 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
                       onChange={handleFormChange}
                       required
                       className="w-full p-2 border rounded-xl text-xs font-mono font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Fecha de Grado *</label>
+                    <input
+                      type="date"
+                      name="fecha_grado"
+                      value={formState.fecha_grado}
+                      onChange={handleFormChange}
+                      required
+                      className="w-full p-2 border rounded-xl text-xs bg-white"
                     />
                   </div>
 
@@ -866,18 +1040,6 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Fecha de Grado *</label>
-                    <input
-                      type="date"
-                      name="fecha_grado"
-                      value={formState.fecha_grado}
-                      onChange={handleFormChange}
-                      required
-                      className="w-full p-2 border rounded-xl text-xs"
-                    />
-                  </div>
-
-                  <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Jornada</label>
                     <select
                       name="jornada"
@@ -893,7 +1055,7 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
                     </select>
                   </div>
 
-                  <div>
+                  <div className="md:col-span-4">
                     <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Beneficiario Exención Pago</label>
                     <select
                       name="beneficiario_exencion"
