@@ -40,21 +40,63 @@ interface StudentPama {
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
+const numeroALetrasAnio = (year: number): string => {
+  const unidades = ['', 'un', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
+  const decenas = ['', 'diez', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+  const especiales: Record<number, string> = {
+    10: 'diez', 11: 'once', 12: 'doce', 13: 'trece', 14: 'catorce', 15: 'quince',
+    16: 'dieciséis', 17: 'diecisiete', 18: 'dieciocho', 19: 'diecinueve',
+    20: 'veinte', 21: 'veintiuno', 22: 'veintidós', 23: 'veintitrés', 24: 'veinticuatro',
+    25: 'veinticinco', 26: 'veintiséis', 27: 'veintisiete', 28: 'veintiocho', 29: 'veintinueve'
+  };
+
+  const miles = Math.floor(year / 1000);
+  const prefijo = miles === 2 ? 'dos mil' : miles === 1 ? 'mil' : `${unidades[miles]} mil`;
+  const resto = year % 100;
+  let restoTexto = '';
+
+  if (especiales[resto]) {
+    restoTexto = especiales[resto];
+  } else {
+    const d = Math.floor(resto / 10);
+    const u = resto % 10;
+    if (d > 2 && u > 0) {
+      restoTexto = `${decenas[d]} y ${u === 1 ? 'uno' : unidades[u]}`;
+    } else if (d > 0 && u === 0) {
+      restoTexto = decenas[d];
+    } else if (d === 0 && u > 0) {
+      restoTexto = u === 1 ? 'uno' : unidades[u];
+    }
+  }
+
+  return `${prefijo} ${restoTexto} (${year})`.trim();
+};
+
 export default function CertificadosPamaPanel({ hasPermission }: { hasPermission?: (modulo: string, accion?: "VIEW" | "MODIFICAR" | "ELIMINAR") => boolean }) {
+  const currentYearNum = new Date().getFullYear();
+  const currentYearStr = currentYearNum.toString();
+
   const [students, setStudents] = useState<StudentPama[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorErrorMsg] = useState<string | null>(null);
 
-  // Filters
-  const [selectedAnio, setSelectedAnio] = useState('2025');
+  // Filters - Defaults dynamically to current year (2026, 2027, etc.)
+  const [selectedAnio, setSelectedAnio] = useState(currentYearStr);
   const [searchQuery, setSearchQuery] = useState('');
+  const [availableYears, setAvailableYears] = useState<string[]>(() => {
+    const years: string[] = [];
+    for (let y = currentYearNum + 1; y >= 2020; y--) {
+      years.push(y.toString());
+    }
+    return years;
+  });
 
   // Modal / Form state
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
 
   const [formState, setFormState] = useState<StudentPama>({
-    anio: '2025',
+    anio: currentYearStr,
     tipo_documento: 'CC',
     documento: '',
     nombre: '',
@@ -79,6 +121,14 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
       const res = await fetch('/api/certificados-pama');
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+
+      // Collect all distinct years from DB and merge with default dynamic range
+      const dbYears: string[] = (json.data || []).map((s: any) => s.anio?.toString()).filter(Boolean);
+      setAvailableYears(prev => {
+        const set = new Set([...prev, ...dbYears]);
+        return Array.from(set).sort((a, b) => Number(b) - Number(a));
+      });
+
       const data = (json.data || []).filter((s: any) => s.anio === selectedAnio).sort((a: any, b: any) => a.nombre.localeCompare(b.nombre));
       setStudents(data);
       setErrorErrorMsg(null);
@@ -507,11 +557,12 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
       }
       y += 12;
 
-      // Final paragraph
+      // Final paragraph - Dynamic expedition date using current day, month, and year
       const hoy = new Date();
       const dia = hoy.getDate();
       const mes = MESES[hoy.getMonth()];
-      const textoFinal = `Se expide a solicitud del interesado para trámites ante Universidades de Colombia; en ${s.lugar_expedicion || 'Puerto Asís'}, a los (${dia}) días del mes de ${mes} de dos mil veinticinco (2025).`;
+      const anioHoy = hoy.getFullYear();
+      const textoFinal = `Se expide a solicitud del interesado para trámites ante Universidades de Colombia; en ${s.lugar_expedicion || 'Puerto Asís'}, a los (${dia}) días del mes de ${mes} de ${numeroALetrasAnio(anioHoy)}.`;
       
       y = drawJustifiedText(doc, textoFinal, safeX, y, contentWidth, 6, []);
 
@@ -625,13 +676,11 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
           <select
             value={selectedAnio}
             onChange={e => setSelectedAnio(e.target.value)}
-            className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-sky-500 font-extrabold text-slate-800 bg-white"
+            className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-sky-500 font-extrabold text-slate-800 bg-white cursor-pointer"
           >
-            <option value="2022">2022</option>
-            <option value="2023">2023</option>
-            <option value="2024">2024</option>
-            <option value="2025">2025</option>
-            <option value="2026">2026</option>
+            {availableYears.map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
           </select>
         </div>
 
