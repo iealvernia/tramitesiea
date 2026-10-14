@@ -38,7 +38,8 @@ import {
   Info,
   Archive,
   RefreshCcw,
-  UploadCloud
+  UploadCloud,
+  Send
 } from 'lucide-react';
 import { uploadFileToR2 } from '../lib/r2';
 import { DocenteEvaluacion } from '../types';
@@ -1756,27 +1757,46 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       const existingSibling = evaluaciones.find(e => e.cedula === itemToSave.cedula && e.periodo === p);
       
       if (existingSibling) {
+        // Sync functional/behavioral commitments definitions from S1, but NEVER overwrite the sibling's own evidences, portfolio, or approval status!
         siblingUpdates.push({
           ...existingSibling,
           compromisosFuncionales: itemToSave.compromisosFuncionales.map(func => {
-            const oldFunc = existingSibling.compromisosFuncionales.find(f => f.competencia === func.competencia);
-            return { ...func, evaluacion: oldFunc ? oldFunc.evaluacion : 0 };
+            const oldFunc = existingSibling.compromisosFuncionales?.find(f => f.competencia === func.competencia);
+            return {
+              ...func,
+              evaluacion: oldFunc ? oldFunc.evaluacion : 0,
+              puntaje: oldFunc ? oldFunc.puntaje : 0,
+              puntaje2: oldFunc ? oldFunc.puntaje2 : 0
+            };
           }),
           compromisosComportamentales: itemToSave.compromisosComportamentales.map(cc => {
-            const oldCc = existingSibling.compromisosComportamentales.find(c => c.competencia === cc.competencia);
-            return { ...cc, puntaje: oldCc ? oldCc.puntaje : 0, puntaje2: oldCc ? oldCc.puntaje2 : 0 };
+            const oldCc = existingSibling.compromisosComportamentales?.find(c => c.competencia === cc.competencia);
+            return {
+              ...cc,
+              puntaje: oldCc ? oldCc.puntaje : 0,
+              puntaje2: oldCc ? oldCc.puntaje2 : 0
+            };
           }),
-          evidenciasAnexo2: itemToSave.evidenciasAnexo2,
-          evidenciasAnexo5: itemToSave.evidenciasAnexo5,
+          // Maintain each period's own evidences and portfolio strictly independent
+          evidenciasAnexo2: existingSibling.evidenciasAnexo2 || [],
+          evidenciasAnexo5: existingSibling.evidenciasAnexo5 || [],
+          portfolioPdfUrl: existingSibling.portfolioPdfUrl,
+          portfolioPdfName: existingSibling.portfolioPdfName,
           updatedAt: new Date().toISOString()
         });
       } else {
-        // Create it if it doesn't exist so it stays perfectly in sync
+        // Create it if it doesn't exist, starting clean in Borrador with EMPTY evidences and NO inherited portfolio
         siblingUpdates.push({
           ...itemToSave,
           id: `${itemToSave.cedula}__${itemToSave.anio}__${p}`,
           periodo: p as 1 | 2 | 3 | 4,
           estado: 'Borrador', // Default state for newly cloned siblings
+          portfolioPdfUrl: undefined,
+          portfolioPdfName: undefined,
+          anexo2Aprobado: false,
+          anexo5Aprobado: false,
+          evidenciasAnexo2: [],
+          evidenciasAnexo5: [],
           compromisosFuncionales: itemToSave.compromisosFuncionales.map(cf => ({ ...cf, puntaje: 0, puntaje2: 0 })),
           compromisosComportamentales: itemToSave.compromisosComportamentales.map(cc => ({ ...cc, puntaje: 0, puntaje2: 0 })),
           updatedAt: new Date().toISOString()
@@ -2165,7 +2185,67 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
     showToast('Retroalimentación guardada y enviada.');
   };
 
-  const handleAdminChangeStatus = (evalId: string, newStatus: 'Aprobado' | 'Corregir') => {
+  const handleAdminApproveAnexo = (evalId: string, anexo: 'Anexo 2' | 'Anexo 5') => {
+    const itemToUpdate = evaluaciones.find(item => item.id === evalId);
+    if (!itemToUpdate) return;
+
+    const newFeedback: FeedbackEntry = {
+      id: crypto.randomUUID(),
+      fecha: new Date().toISOString(),
+      anexo,
+      mensaje: `✅ ${anexo} revisado y aprobado. No requiere modificaciones.`,
+      autor: 'Evaluador'
+    };
+
+    const historial = itemToUpdate.historialRetroalimentacion || [];
+    const updatedEval = {
+      ...itemToUpdate,
+      anexo2Aprobado: anexo === 'Anexo 2' ? true : itemToUpdate.anexo2Aprobado,
+      anexo5Aprobado: anexo === 'Anexo 5' ? true : itemToUpdate.anexo5Aprobado,
+      historialRetroalimentacion: [...historial, newFeedback],
+      updatedAt: new Date().toISOString()
+    };
+
+    setEvaluaciones(prev => prev.map(item => item.id === evalId ? updatedEval : item));
+    if (selectedEvalForInspection && selectedEvalForInspection.id === evalId) {
+      setSelectedEvalForInspection(updatedEval);
+    }
+    syncEvaluacionesToPostgres(updatedEval);
+    showToast(`✓ ${anexo} aprobado correctamente.`);
+  };
+
+  const handleAdminRejectAnexo = (evalId: string, anexo: 'Anexo 2' | 'Anexo 5', message: string) => {
+    if (!message.trim()) return;
+    const itemToUpdate = evaluaciones.find(item => item.id === evalId);
+    if (!itemToUpdate) return;
+
+    const newFeedback: FeedbackEntry = {
+      id: crypto.randomUUID(),
+      fecha: new Date().toISOString(),
+      anexo,
+      mensaje: message,
+      autor: 'Evaluador'
+    };
+
+    const historial = itemToUpdate.historialRetroalimentacion || [];
+    const updatedEval = {
+      ...itemToUpdate,
+      estado: 'Corregir' as const,
+      anexo2Aprobado: anexo === 'Anexo 2' ? false : itemToUpdate.anexo2Aprobado,
+      anexo5Aprobado: anexo === 'Anexo 5' ? false : itemToUpdate.anexo5Aprobado,
+      historialRetroalimentacion: [...historial, newFeedback],
+      updatedAt: new Date().toISOString()
+    };
+
+    setEvaluaciones(prev => prev.map(item => item.id === evalId ? updatedEval : item));
+    if (selectedEvalForInspection && selectedEvalForInspection.id === evalId) {
+      setSelectedEvalForInspection(updatedEval);
+    }
+    syncEvaluacionesToPostgres(updatedEval);
+    showToast(`Solicitud de correcciones enviada para ${anexo}.`);
+  };
+
+  const handleAdminChangeStatus = (evalId: string, newStatus: 'Aprobado' | 'Corregir' | 'Borrador' | 'Enviado') => {
     const itemToUpdate = evaluaciones.find(item => item.id === evalId);
     if (!itemToUpdate) return;
     
@@ -6356,9 +6436,6 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       <p className="font-medium text-slate-600">
                         Sus evidencias y soportes físicos correspondientes a <strong>Seguimiento {selectedPeriod} (Evidencia {selectedPeriod})</strong> han sido verificados y aprobados con éxito por el Rector. Ya puede descargar su certificado oficial de cumplimiento.
                       </p>
-                      <div className="pt-4 mt-6">
-                        {renderPortfolioUpload()}
-                      </div>
                     </div>
                   </div>
                   <button
@@ -6558,7 +6635,9 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
             <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <Award className="w-5 h-5 text-blue-400" />
-                <h3 className="font-bold text-base leading-none">Revisión de Compromisos (Docente 1278)</h3>
+                <h3 className="font-bold text-base leading-none">
+                  Revisión Individual: {Number(selectedEvalForInspection.periodo) === 1 ? 'Seguimiento 1 (Concertación)' : `Seguimiento ${selectedEvalForInspection.periodo} (Evidencias y Portafolio)`}
+                </h3>
               </div>
               <button
                 onClick={() => setSelectedEvalForInspection(null)}
@@ -7223,7 +7302,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
 
               {/* Approval Actions Panel */}
               <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-4 mt-4">
-                <div className="flex items-center justify-end gap-3 pt-2">
+                <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
                   <button
                     onClick={() => {
                       if (window.confirm('¿Está de acuerdo en borrar? Se borrará toda la información agregada por el docente y no se podrá deshacer.')) {
@@ -7231,10 +7310,37 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       }
                     }}
                     className="py-2 px-3 bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
-                    title="Eliminar este envío falso/borrador"
+                    title="Eliminar este registro"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
+
+                  {selectedEvalForInspection.estado === 'Aprobado' && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`¿Desea reabrir o desbloquear el Seguimiento ${selectedEvalForInspection.periodo} para que el docente pueda subir o actualizar evidencias? La información y portafolios actuales no se borrarán.`)) {
+                          handleAdminChangeStatus(selectedEvalForInspection.id, 'Borrador');
+                        }
+                      }}
+                      className="py-2 px-3.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      title="Reabrir este seguimiento individual en estado Borrador para permitir al docente subir o ajustar sus evidencias"
+                    >
+                      <RefreshCcw className="w-3.5 h-3.5" />
+                      Reabrir Seguimiento {selectedEvalForInspection.periodo} (Borrador)
+                    </button>
+                  )}
+
+                  {selectedEvalForInspection.estado === 'Borrador' && (
+                    <button
+                      onClick={() => handleAdminChangeStatus(selectedEvalForInspection.id, 'Enviado')}
+                      className="py-2 px-3.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                      title="Marcar este seguimiento como Enviado / En Revisión"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      Marcar como Recibido (Enviado)
+                    </button>
+                  )}
+
                   <button
                     onClick={() => handleAdminChangeStatus(selectedEvalForInspection.id, 'Corregir')}
                     className="py-2 px-4 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
@@ -7242,14 +7348,16 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     <AlertCircle className="w-3.5 h-3.5" />
                     Solicitar Correcciones
                   </button>
+
                   <button
                     onClick={() => handleAdminChangeStatus(selectedEvalForInspection.id, 'Aprobado')}
                     className="py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm shadow-emerald-500/10"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    {Number(selectedEvalForInspection.periodo) === 1 ? 'Aprobar Concertación' : 
-                     (Number(selectedEvalForInspection.periodo) === 2 || Number(selectedEvalForInspection.periodo) === 3) ? 'Aprobar Portafolio' : 
-                     'Aprobar Anexo 6'}
+                    {Number(selectedEvalForInspection.periodo) === 1 ? 'Aprobar Concertación (S1)' : 
+                     Number(selectedEvalForInspection.periodo) === 2 ? 'Aprobar Portafolio (Seguimiento 2)' : 
+                     Number(selectedEvalForInspection.periodo) === 3 ? 'Aprobar Portafolio (Seguimiento 3)' : 
+                     'Aprobar Calificación Final (S4)'}
                   </button>
                 </div>
               </div>
