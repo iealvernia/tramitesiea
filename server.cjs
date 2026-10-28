@@ -276,6 +276,8 @@ async function ensureDbTables() {
         vive_con TEXT,
         repitente TEXT,
         discapacidad TEXT,
+        tipo_discapacidad TEXT,
+        trastorno_aprendizaje TEXT,
         estudio_anterior TEXT,
         institucion_anterior TEXT,
         num_hermanos TEXT,
@@ -291,6 +293,12 @@ async function ensureDbTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      ALTER TABLE alvernia_matriculas ADD COLUMN IF NOT EXISTS tipo_discapacidad TEXT;
+      ALTER TABLE alvernia_matriculas ADD COLUMN IF NOT EXISTS trastorno_aprendizaje TEXT;
+      ALTER TABLE alvernia_matriculas ADD COLUMN IF NOT EXISTS vive_con_otro TEXT;
+      ALTER TABLE alvernia_matriculas ADD COLUMN IF NOT EXISTS acudiente_parentesco_otro TEXT;
+      CREATE INDEX IF NOT EXISTS idx_alvernia_matriculas_created_at ON alvernia_matriculas(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_alvernia_matriculas_id ON alvernia_matriculas(id);
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS alvernia_certificados (
@@ -1718,12 +1726,19 @@ app.post("/api/upload", async (req, res) => {
     res.status(500).json({ success: false, error: err.message || err });
   }
 });
+var apiCacheMap = /* @__PURE__ */ new Map();
 var genericCRUD = (route, tableName) => {
   app.get(`/api/${route}`, async (req, res) => {
     const pool = getDbPool();
     if (!pool) return res.status(500).json({ error: "DB not connected" });
     try {
       const { user_id } = req.query;
+      if (!user_id) {
+        const cached = apiCacheMap.get(tableName);
+        if (cached && Date.now() - cached.time < 6e4) {
+          return res.json({ data: cached.data });
+        }
+      }
       let query = `SELECT * FROM ${tableName}`;
       let values = [];
       if (user_id) {
@@ -1732,6 +1747,9 @@ var genericCRUD = (route, tableName) => {
       }
       query += ` ORDER BY created_at DESC`;
       const { rows } = await pool.query(query, values);
+      if (!user_id) {
+        apiCacheMap.set(tableName, { time: Date.now(), data: rows });
+      }
       res.json({ data: rows });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1741,6 +1759,7 @@ var genericCRUD = (route, tableName) => {
     const pool = getDbPool();
     if (!pool) return res.status(500).json({ error: "DB not connected" });
     try {
+      apiCacheMap.delete(tableName);
       const data = req.body;
       const id = data.id;
       let isUpdate = false;
@@ -1777,6 +1796,7 @@ var genericCRUD = (route, tableName) => {
     const pool = getDbPool();
     if (!pool) return res.status(500).json({ error: "DB not connected" });
     try {
+      apiCacheMap.delete(tableName);
       const { id } = req.params;
       const result = await pool.query(`DELETE FROM ${tableName} WHERE id = $1 RETURNING *`, [id]);
       res.json({ data: result.rows });
