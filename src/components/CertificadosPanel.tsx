@@ -921,7 +921,11 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
       y += 18;
 
       // Retrieve dynamic rector parameters from configuration
-      const rectorName = localStorage.getItem('iea_rector_name') || "ESP. CARLOS ARCESIO ACOSTA CORONEL";
+      let rectorName = localStorage.getItem('iea_rector_name') || "ESP. CARLOS ARCESIO ACOSTA CORONEL";
+      if (!rectorName || rectorName.toUpperCase().includes("JARAMILLO")) {
+        rectorName = "ESP. CARLOS ARCESIO ACOSTA CORONEL";
+        localStorage.setItem('iea_rector_name', rectorName);
+      }
       const rectorCargo = localStorage.getItem('iea_rector_cargo') || "RECTOR";
       const customSignature = localStorage.getItem('iea_custom_signature') || '';
 

@@ -36,6 +36,8 @@ interface StudentPama {
   caracter?: string;
   lugar_expedicion?: string;
   beneficiario_exencion?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -124,9 +126,14 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
       const json = await res.json();
       if (json.error) throw new Error(json.error);
 
-      const list: StudentPama[] = (json.data || []).sort((a: any, b: any) => {
-        if (a.anio !== b.anio) {
-          return Number(b.anio || 0) - Number(a.anio || 0);
+      const list: StudentPama[] = (json.data || []).map((s: any) => ({
+        ...s,
+        fecha_grado: s.fecha_grado ? (s.fecha_grado.includes('T') ? s.fecha_grado.substring(0, 10) : s.fecha_grado) : ''
+      })).sort((a: any, b: any) => {
+        const timeA = new Date(a.created_at || a.updated_at || 0).getTime();
+        const timeB = new Date(b.created_at || b.updated_at || 0).getTime();
+        if (timeB !== timeA) {
+          return timeB - timeA;
         }
         return (a.nombre || '').localeCompare(b.nombre || '');
       });
@@ -151,18 +158,33 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
 
   useEffect(() => {
     loadData();
+    // Synchronize institutional configuration to keep rector parameters current
+    fetch('/api/config')
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.config) {
+          if (d.config.rectorName) localStorage.setItem('iea_rector_name', d.config.rectorName);
+          if (d.config.rectorCargo) localStorage.setItem('iea_rector_cargo', d.config.rectorCargo);
+          if (d.config.rectorSignature) localStorage.setItem('iea_custom_signature', d.config.rectorSignature);
+        }
+      })
+      .catch(e => console.error("Error fetching institutional config in CertificadosPamaPanel:", e));
   }, []);
 
   // Open modal
   const handleOpenAdd = () => {
     setEditId(null);
+    const initialAnio = selectedAnio !== 'TODOS' ? selectedAnio : currentYearStr;
+    const today = new Date();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
     setFormState({
-      anio: selectedAnio !== 'TODOS' ? selectedAnio : currentYearStr,
+      anio: initialAnio,
       tipo_documento: 'TI',
       documento: '',
       nombre: '',
       grado: 'UNDÉCIMO (11°)',
-      fecha_grado: new Date().toISOString().substring(0, 10),
+      fecha_grado: `${initialAnio}-${mm}-${dd}`,
       jornada: 'MAÑANA',
       acta: '',
       folio: '',
@@ -180,7 +202,14 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
 
   const handleOpenEdit = (student: StudentPama) => {
     setEditId(student.id || null);
-    setFormState({ ...student });
+    let normalizedFecha = student.fecha_grado || '';
+    if (normalizedFecha.includes('T')) {
+      normalizedFecha = normalizedFecha.substring(0, 10);
+    }
+    setFormState({
+      ...student,
+      fecha_grado: normalizedFecha
+    });
     setShowModal(true);
   };
 
@@ -254,10 +283,23 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormState(prev => ({
-      ...prev,
-      [name]: name === 'nombre' ? value.toUpperCase() : value
-    }));
+    setFormState(prev => {
+      const next = {
+        ...prev,
+        [name]: name === 'nombre' ? value.toUpperCase() : value
+      };
+      // If user changes 'anio' and it is a valid 4-digit year, sync the year in fecha_grado
+      if (name === 'anio' && /^\d{4}$/.test(value.trim())) {
+        const targetYear = value.trim();
+        if (prev.fecha_grado && /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(prev.fecha_grado)) {
+          const parts = prev.fecha_grado.split(/[-/]/);
+          next.fecha_grado = `${targetYear}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        } else {
+          next.fecha_grado = `${targetYear}-11-28`;
+        }
+      }
+      return next;
+    });
   };
 
   // Submit / Save form
@@ -269,11 +311,14 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
     }
 
     const targetAnio = formState.anio?.trim() || currentYearStr;
+    const nowIso = new Date().toISOString();
     const payload = {
       ...formState,
       anio: targetAnio,
       nombre: formState.nombre.trim().toUpperCase(),
-      documento: formState.documento.trim()
+      documento: formState.documento.trim(),
+      updated_at: nowIso,
+      ...(!editId ? { created_at: nowIso } : {})
     };
 
     try {
@@ -298,27 +343,46 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
         alert('Estudiante PAMA guardado exitosamente.');
       }
       setShowModal(false);
-      setSelectedAnio(targetAnio);
+      if (selectedAnio !== 'TODOS' && selectedAnio !== targetAnio) {
+        setSelectedAnio(targetAnio);
+      }
       await loadData();
     } catch (err: any) {
       alert('Error guardando en Base de Datos: ' + err.message);
     }
   };
 
-  // Helper date formatting (05 de diciembre del 2024)
+  // Helper date formatting (e.g. "28 de noviembre del 2025")
   const formatFechaNumerica = (fecha: string): string => {
     if (!fecha) return '';
     try {
-      const parts = fecha.split('-');
-      if (parts.length === 3) {
+      const trimmed = fecha.trim();
+      // Handle YYYY-MM-DD or YYYY/MM/DD
+      if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(trimmed)) {
+        const parts = trimmed.split(/[-/]/);
         const year = parts[0];
-        const monthIdx = parseInt(parts[1]) - 1;
-        const day = parseInt(parts[2]).toString().padStart(2, '0');
-        return `${day} de ${MESES[monthIdx]} del ${year}`;
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10).toString();
+        if (monthIdx >= 0 && monthIdx < 12) {
+          return `${day} de ${MESES[monthIdx]} del ${year}`;
+        }
       }
-      const date = new Date(fecha);
-      const dia = date.getDate().toString().padStart(2, '0');
-      return `${dia} de ${MESES[date.getMonth()]} del ${date.getFullYear()}`;
+      // Handle DD-MM-YYYY or DD/MM/YYYY
+      if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}/.test(trimmed)) {
+        const parts = trimmed.split(/[-/]/);
+        const day = parseInt(parts[0], 10).toString();
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        const year = parts[2];
+        if (monthIdx >= 0 && monthIdx < 12) {
+          return `${day} de ${MESES[monthIdx]} del ${year}`;
+        }
+      }
+      const date = new Date(trimmed.includes('T') ? trimmed : `${trimmed}T12:00:00`);
+      if (!isNaN(date.getTime())) {
+        const dia = date.getDate().toString();
+        return `${dia} de ${MESES[date.getMonth()]} del ${date.getFullYear()}`;
+      }
+      return fecha;
     } catch (e) {
       return fecha;
     }
@@ -331,10 +395,12 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
     let currentLineWidth = 0;
 
     words.forEach(word => {
-      const cleanWord = word.replace(/[^A-ZÁÉÍÓÚÜÑ]/gi, "");
+      const cleanWord = word.replace(/[^A-ZÁÉÍÓÚÜÑ0-9]/gi, "").toUpperCase();
       const isBold = boldWords.some(boldWord => {
-        const cleanBold = boldWord.replace(/[^A-ZÁÉÍÓÚÜÑ]/gi, "");
-        return cleanWord === cleanBold || word.includes(boldWord);
+        if (!boldWord) return false;
+        const cleanBold = boldWord.replace(/[^A-ZÁÉÍÓÚÜÑ0-9]/gi, "").toUpperCase();
+        if (!cleanBold) return false;
+        return cleanWord === cleanBold || word.toUpperCase().includes(boldWord.toUpperCase());
       });
       
       doc.setFont("helvetica", isBold ? "bold" : "normal");
@@ -480,9 +546,14 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
       doc.setFontSize(12);
       
       const nombrePartes = s.nombre.split(' ');
-      const textoCertificado = `Que el(la) estudiante, ${s.nombre}, identificado(a) con ${s.tipo_documento} número ${s.documento} expedida en ${s.lugar_expedicion || 'Puerto Asís'} cursó y aprobó el grado ${s.grado}. Fecha de grado ${formatFechaNumerica(s.fecha_grado)}.`;
+      const fechaGradoFormateada = formatFechaNumerica(s.fecha_grado);
+      const fechaPartes = fechaGradoFormateada.split(' ');
+      const diaGrado = fechaPartes[0];
+      const anioGrado = fechaPartes[fechaPartes.length - 1];
+
+      const textoCertificado = `Que el(la) estudiante, ${s.nombre}, identificado(a) con ${s.tipo_documento} número ${s.documento} expedida en ${s.lugar_expedicion || 'Puerto Asís'} cursó y aprobó el grado ${s.grado}. Fecha de grado ${fechaGradoFormateada}.`;
       
-      y = drawJustifiedText(doc, textoCertificado, safeX, y, contentWidth, 6, [...nombrePartes, s.grado, s.jornada]);
+      y = drawJustifiedText(doc, textoCertificado, safeX, y, contentWidth, 6, [...nombrePartes, s.grado, s.documento, diaGrado, anioGrado].filter(Boolean));
 
       // Tabla de matriculado PAMA layout
       y += 3;
@@ -542,7 +613,7 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
       doc.text(`JORNADA: ${s.jornada}`, col2X + cellPadding, y + cellPadding + (rowHeight * 2));
       doc.text(`INTENSIDAD HORARIA:`, col2X + cellPadding, y + cellPadding + (rowHeight * 3));
       doc.text(`${s.intensidad_horaria || '30 horas'}`, col2X + cellPadding, y + cellPadding + (rowHeight * 3) + 2.5);
-      doc.text(`CALENDARIO: A`, col2X + cellPadding, y + cellPadding + (rowHeight * 4));
+      doc.text(`AÑO LECTIVO: ${s.anio || 'N/A'} - CALENDARIO: A`, col2X + cellPadding, y + cellPadding + (rowHeight * 4));
 
       // Reset style text
       doc.setTextColor(0, 0, 0);
@@ -584,7 +655,11 @@ export default function CertificadosPamaPanel({ hasPermission }: { hasPermission
       y = drawJustifiedText(doc, textoFinal, safeX, y, contentWidth, 6, []);
 
       // Retrieve dynamic rector parameters from configuration
-      const rectorName = localStorage.getItem('iea_rector_name') || "ESP. DAVID JARAMILLO CORAL";
+      let rectorName = localStorage.getItem('iea_rector_name') || "ESP. CARLOS ARCESIO ACOSTA CORONEL";
+      if (!rectorName || rectorName.toUpperCase().includes("JARAMILLO")) {
+        rectorName = "ESP. CARLOS ARCESIO ACOSTA CORONEL";
+        localStorage.setItem('iea_rector_name', rectorName);
+      }
       const rectorCargo = localStorage.getItem('iea_rector_cargo') || "RECTOR";
       const customSignature = localStorage.getItem('iea_custom_signature') || '';
 

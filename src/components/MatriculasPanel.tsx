@@ -39,8 +39,11 @@ interface StudentMatricula {
   epsAfiliacion?: string;
   grupoEtnico?: string;
   viveCon?: string;
+  viveConOtro?: string;
   repitente?: string;
   discapacidad?: string;
+  tipoDiscapacidad?: string;
+  trastornoAprendizaje?: string;
   estudioAnterior?: string;
   institucionAnterior?: string;
   numHermanos?: string;
@@ -55,6 +58,7 @@ interface StudentMatricula {
   acudienteDireccion?: string;
   acudienteTelefono?: string;
   acudienteParentesco?: string;
+  acudienteParentescoOtro?: string;
   acudienteProfesion?: string;
 }
 
@@ -93,17 +97,18 @@ export default function MatriculasPanel({ showToast, hasPermission, userSession 
   // Modal / Form state
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [formState, setFormState] = useState<StudentMatricula>({
     primerApellido: '', segundoApellido: '', primerNombre: '', segundoNombre: '',
     tipoDocumento: '', numeroDocumento: '', fechaNacimiento: '', nivelEducativo: '',
     grado: '', fechaMatricula: new Date().toISOString().substring(0, 10), jornada: 'ÚNICA', 
     sede: 'COL ALVERNIA', sexo: 'MASCULINO', municipioResidencia: '', direccionResidencia: '',
-    telefonoCelular: '', epsAfiliacion: '', grupoEtnico: 'NINGUNO', viveCon: 'PADRES',
-    repitente: 'NO', discapacidad: 'NO', estudioAnterior: 'SÍ', institucionAnterior: '',
+    telefonoCelular: '', epsAfiliacion: '', grupoEtnico: 'NINGUNO', viveCon: 'PADRES', viveConOtro: '',
+    repitente: 'NO', discapacidad: 'NO', tipoDiscapacidad: '', trastornoAprendizaje: 'NO APLICA', estudioAnterior: 'SÍ', institucionAnterior: '',
     numHermanos: '0', grados: 'NO APLICA', correoEstudiante: '', estrato: '', tipoSangre: '',
     acudienteApellidos: '', acudienteNombres: '', acudienteDocumento: '',
     acudienteMunicipio: '', acudienteDireccion: '', acudienteTelefono: '',
-    acudienteParentesco: '', acudienteProfesion: ''
+    acudienteParentesco: '', acudienteParentescoOtro: '', acudienteProfesion: ''
   });
 
   // Dynamic html2pdf loader
@@ -150,7 +155,13 @@ export default function MatriculasPanel({ showToast, hasPermission, userSession 
   // Open modal for editing
   const handleEdit = (student: StudentMatricula) => {
     setEditId(student.id || null);
-    setFormState({ ...student });
+    setFormState({
+      ...student,
+      tipoDiscapacidad: student.tipoDiscapacidad || '',
+      trastornoAprendizaje: student.trastornoAprendizaje || 'NO APLICA',
+      viveConOtro: student.viveConOtro || '',
+      acudienteParentescoOtro: student.acudienteParentescoOtro || ''
+    });
     setShowModal(true);
   };
 
@@ -177,33 +188,42 @@ export default function MatriculasPanel({ showToast, hasPermission, userSession 
       return;
     }
 
+    setSaving(true);
     const payload = toSnakeCase(formState);
     try {
       if (editId) {
         payload.id = editId;
-        const res = await fetch('/api/matriculas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const json = await res.json();
-        if (json.error) throw new Error(json.error);
-        alert('Matrícula actualizada correctamente.');
-      } else {
-        const res = await fetch('/api/matriculas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const json = await res.json();
-        if (json.error) throw new Error(json.error);
-        alert('Estudiante matriculado correctamente.');
       }
+      const res = await fetch('/api/matriculas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+
+      // Instant optimistic update: update table data immediately with saved item
+      const savedRow = json.data && json.data[0] ? toCamelCase(json.data[0]) : { ...formState, id: editId };
+      if (editId) {
+        setStudents(prev => prev.map(s => String(s.id) === String(editId) ? { ...s, ...savedRow } : s));
+      } else {
+        setStudents(prev => [savedRow, ...prev]);
+      }
+
       setShowModal(false);
+      if (showToast) {
+        showToast(editId ? 'Ficha de matrícula actualizada correctamente.' : 'Estudiante matriculado con éxito.');
+      } else {
+        alert(editId ? 'Matrícula actualizada correctamente.' : 'Estudiante matriculado correctamente.');
+      }
+
+      // Sync in background without blocking UI
       loadData();
     } catch (err: any) {
       console.error('Error saving student:', err);
-      alert('Error guardando los datos en Supabase: ' + err.message);
+      alert('Error guardando los datos: ' + err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -233,9 +253,11 @@ export default function MatriculasPanel({ showToast, hasPermission, userSession 
       "TELEFONO": s.telefonoCelular || '',
       "EPS": s.epsAfiliacion || '',
       "GRUPO ETNICO": s.grupoEtnico || '',
-      "VIVE CON": s.viveCon || '',
+      "VIVE CON": (s.viveCon === 'OTROS' && s.viveConOtro) ? s.viveConOtro : (s.viveCon || ''),
       "REPITENTE": s.repitente || '',
       "DISCAPACIDAD": s.discapacidad || '',
+      "TIPO DISCAPACIDAD": s.tipoDiscapacidad || '',
+      "TRASTORNO APRENDIZAJE": s.trastornoAprendizaje || '',
       "ESTUDIO ANTERIOR": s.estudioAnterior || '',
       "INSTITUCION ANTERIOR": s.institucionAnterior || '',
       "CORREO ELECTRONICO": s.correoEstudiante || '',
@@ -245,7 +267,7 @@ export default function MatriculasPanel({ showToast, hasPermission, userSession 
       "ACUDIENTE NOMBRES": s.acudienteNombres || '',
       "ACUDIENTE DOCUMENTO": s.acudienteDocumento || '',
       "ACUDIENTE TELEFONO": s.acudienteTelefono || '',
-      "ACUDIENTE PARENTESCO": s.acudienteParentesco || '',
+      "ACUDIENTE PARENTESCO": (s.acudienteParentesco === 'OTRO' && s.acudienteParentescoOtro) ? s.acudienteParentescoOtro : (s.acudienteParentesco || ''),
       "ACUDIENTE PROFESION": s.acudienteProfesion || ''
     }));
 
@@ -314,9 +336,19 @@ const handlePrint = async (s: StudentMatricula) => {
       // Centered value
       doc.setTextColor(textColor[0], textColor[1], textColor[2]);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      const splitVal = doc.splitTextToSize(value, w - 2);
-      doc.text(splitVal, x + (w/2), y + 7.5, { align: "center" });
+      
+      const vStr = (value || "").toString().trim();
+      let fontSize = 8;
+      if (vStr.length > 28) fontSize = 5.2;
+      else if (vStr.length > 18) fontSize = 6.2;
+      else if (vStr.length > 12) fontSize = 7;
+      
+      doc.setFontSize(fontSize);
+      const splitVal = doc.splitTextToSize(vStr, w - 2);
+      const lineHeight = fontSize * 0.35;
+      const totalTextH = splitVal.length * lineHeight;
+      const textStartY = y + 3 + ((h - 3) / 2) - (totalTextH / 2) + (fontSize * 0.28);
+      doc.text(splitVal, x + (w/2), textStartY, { align: "center" });
     };
 
     const drawRow = (y: number, fields: {lbl: string, val: string, w: number}[]) => {
@@ -409,16 +441,39 @@ const handlePrint = async (s: StudentMatricula) => {
       { lbl: "EPS", val: val(s.epsAfiliacion) || '-', w: 1 },
       { lbl: "GRUPO ÉTNICO", val: val(s.grupoEtnico) || 'NINGUNO', w: 1 }
     ]);
+    // Formatear Discapacidad y Trastorno para la ficha de matrícula
+    let discVal = val(s.discapacidad) || 'NO';
+    if (s.discapacidad === 'SÍ') {
+      if (s.tipoDiscapacidad && s.tipoDiscapacidad !== 'NO APLICA') {
+        discVal = `SÍ: ${s.tipoDiscapacidad.replace('DISCAPACIDAD ', '')}`;
+      } else {
+        discVal = 'SÍ';
+      }
+    } else if (s.discapacidad === 'TRASTORNO') {
+      discVal = 'TRASTORNO';
+    }
+
+    const viveConVal = (s.viveCon === 'OTROS' && s.viveConOtro)
+      ? s.viveConOtro
+      : (val(s.viveCon) || 'PADRES');
+
     drawRow(startY + 41, [
-      { lbl: "CON QUIÉN VIVE", val: val(s.viveCon) || 'PADRES', w: 1 },
+      { lbl: "CON QUIÉN VIVE", val: viveConVal, w: 1 },
       { lbl: "REPITENTE", val: val(s.repitente) || 'NO', w: 1 },
-      { lbl: "DISCAPACIDAD", val: val(s.discapacidad) || 'NINGUNA', w: 1 },
+      { lbl: "DISCAPACIDAD", val: discVal, w: 1 },
       { lbl: "ESTUDIÓ AÑO ANT.", val: val(s.estudioAnterior) ? 'SÍ' : 'NO', w: 1 },
       { lbl: "N° HERMANOS/AS", val: val(s.numHermanos) || 'NO APLICA', w: 1 }
     ]);
+
+    // En la fila 5: Si el estudiante tiene trastorno registrado, se muestra en el campo del centro en vez de 'GRADOS: NO APLICA'
+    const hasTrastorno = s.trastornoAprendizaje && s.trastornoAprendizaje !== 'NO APLICA';
+    const middleField = hasTrastorno
+      ? { lbl: "TRASTORNO APRENDIZAJE", val: val(s.trastornoAprendizaje), w: 1 }
+      : { lbl: "GRADOS", val: val(s.grados) || 'NO APLICA', w: 1 };
+
     drawRow(startY + 52.5, [
       { lbl: "INSTITUCIÓN ANTERIOR", val: val(s.institucionAnterior) || '-', w: 2 },
-      { lbl: "GRADOS", val: val(s.grados) || 'NO APLICA', w: 1 },
+      middleField,
       { lbl: "CORREO ESTUDIANTE", val: val(s.correoEstudiante) || val(s.numeroDocumento) + '@alvernia.edu.co', w: 2 }
     ]);
 
@@ -432,9 +487,13 @@ const handlePrint = async (s: StudentMatricula) => {
       { lbl: "TELÉFONO", val: val(s.acudienteTelefono) || '-', w: 1 },
       { lbl: "MUNICIPIO", val: val(s.acudienteMunicipio) || 'PUERTO ASÍS', w: 1 }
     ]);
+    const parentescoVal = (s.acudienteParentesco === 'OTRO' && s.acudienteParentescoOtro)
+      ? s.acudienteParentescoOtro
+      : (val(s.acudienteParentesco) || '-');
+
     drawRow(startY + 18, [
       { lbl: "DIRECCIÓN", val: val(s.acudienteDireccion) || '-', w: 2 },
-      { lbl: "PARENTESCO", val: val(s.acudienteParentesco) || '-', w: 1 },
+      { lbl: "PARENTESCO", val: parentescoVal, w: 1 },
       { lbl: "PROFESIÓN", val: val(s.acudienteProfesion) || '-', w: 2 }
     ]);
 
@@ -676,12 +735,12 @@ const handlePrint = async (s: StudentMatricula) => {
                     tipoDocumento: 'TI', numeroDocumento: '', fechaNacimiento: '', nivelEducativo: 'Primaria',
                     grado: 'PRIMERO 1°', fechaMatricula: new Date().toISOString().substring(0, 10), jornada: 'MAÑANA',
                     sede: 'COL ALVERNIA', sexo: 'MASCULINO', municipioResidencia: 'PUERTO ASÍS', direccionResidencia: '',
-                    telefonoCelular: '', epsAfiliacion: '', grupoEtnico: 'NINGUNO', viveCon: 'PADRES',
-                    repitente: 'NO', discapacidad: 'NO', estudioAnterior: 'SÍ', institucionAnterior: 'IEA',
+                    telefonoCelular: '', epsAfiliacion: '', grupoEtnico: 'NINGUNO', viveCon: 'PADRES', viveConOtro: '',
+                    repitente: 'NO', discapacidad: 'NO', tipoDiscapacidad: '', trastornoAprendizaje: 'NO APLICA', estudioAnterior: 'SÍ', institucionAnterior: 'IEA',
                     numHermanos: '0', grados: 'NO APLICA', correoEstudiante: '', estrato: '1', tipoSangre: 'O+',
                     acudienteApellidos: '', acudienteNombres: '', acudienteDocumento: '',
                     acudienteMunicipio: 'PUERTO ASÍS', acudienteDireccion: '', acudienteTelefono: '',
-                    acudienteParentesco: 'MADRE', acudienteProfesion: 'HOGAR'
+                    acudienteParentesco: 'MADRE', acudienteParentescoOtro: '', acudienteProfesion: 'HOGAR'
                   });
                   setShowModal(true);
                 }}
@@ -1043,7 +1102,19 @@ const handlePrint = async (s: StudentMatricula) => {
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Con quién vive</label>
-                    <select name="viveCon" value={formState.viveCon} onChange={e => setFormState(prev => ({...prev, viveCon: e.target.value}))} className="w-full p-2 border rounded-xl text-xs bg-white text-slate-700">
+                    <select
+                      name="viveCon"
+                      value={formState.viveCon}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setFormState(prev => ({
+                          ...prev,
+                          viveCon: val,
+                          ...(val !== 'OTROS' ? { viveConOtro: '' } : {})
+                        }));
+                      }}
+                      className="w-full p-2 border rounded-xl text-xs bg-white text-slate-700 font-semibold"
+                    >
                       <option value="PADRES">PADRES</option>
                       <option value="MADRE">MADRE</option>
                       <option value="PADRE">PADRE</option>
@@ -1052,6 +1123,17 @@ const handlePrint = async (s: StudentMatricula) => {
                       <option value="TÍOS">TÍOS</option>
                       <option value="OTROS">OTROS</option>
                     </select>
+                    {formState.viveCon === 'OTROS' && (
+                      <input
+                        type="text"
+                        name="viveConOtro"
+                        placeholder="¿Con quién vive? (Especifique)"
+                        value={formState.viveConOtro || ''}
+                        onChange={handleInputChange}
+                        className="w-full mt-1.5 p-1.5 border border-blue-400 bg-blue-50/50 rounded-lg text-xs uppercase text-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        required
+                      />
+                    )}
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Es Repitente</label>
@@ -1064,9 +1146,22 @@ const handlePrint = async (s: StudentMatricula) => {
                   {/* Row 6 */}
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Discapacidad</label>
-                    <select name="discapacidad" value={formState.discapacidad} onChange={e => setFormState(prev => ({...prev, discapacidad: e.target.value}))} className="w-full p-2 border rounded-xl text-xs bg-white text-slate-700">
+                    <select
+                      name="discapacidad"
+                      value={formState.discapacidad}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setFormState(prev => ({
+                          ...prev,
+                          discapacidad: val,
+                          ...(val === 'NO' ? { tipoDiscapacidad: '', trastornoAprendizaje: 'NO APLICA' } : {})
+                        }));
+                      }}
+                      className="w-full p-2 border rounded-xl text-xs bg-white text-slate-700 font-bold focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
                       <option value="NO">NO</option>
                       <option value="SÍ">SÍ</option>
+                      <option value="TRASTORNO">TRASTORNO ESPECÍFICO</option>
                     </select>
                   </div>
                   <div>
@@ -1092,6 +1187,93 @@ const handlePrint = async (s: StudentMatricula) => {
                       <option value="6">6</option>
                     </select>
                   </div>
+
+                  {/* Sub-card elegante y perfectamente alineada para Discapacidad y Trastorno sin romper la cuadrícula */}
+                  {(formState.discapacidad === 'SÍ' || formState.discapacidad === 'TRASTORNO' || (formState.tipoDiscapacidad && formState.tipoDiscapacidad !== 'NO APLICA') || (formState.trastornoAprendizaje && formState.trastornoAprendizaje !== 'NO APLICA')) && (
+                    <div className="md:col-span-4 bg-gradient-to-r from-blue-50/90 via-sky-50/60 to-indigo-50/80 p-4 rounded-2xl border border-blue-200/90 shadow-sm space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-blue-200/70">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-blue-700 text-white flex items-center justify-center shadow-xs">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <h5 className="text-[11px] font-black uppercase text-blue-950 tracking-wide leading-tight">
+                              Inclusión y Necesidades Educativas Especiales
+                            </h5>
+                            <p className="text-[9px] font-semibold text-blue-700/80 leading-none">
+                              Clasificación oficial SIMAT - Ministerio de Educación Nacional
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-bold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full border border-blue-200 uppercase tracking-wider">
+                          SIMAT Inclusivo
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Columna 1: Discapacidad */}
+                        <div className="bg-white/95 p-3.5 rounded-xl border border-blue-200/70 shadow-xs flex flex-col justify-between">
+                          <div className="mb-2.5 min-h-[38px]">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <label className="text-[10px] font-extrabold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-blue-600" />
+                                Categoría / Tipo de Discapacidad {formState.discapacidad === 'SÍ' ? '*' : ''}
+                              </label>
+                              <span className="text-[8.5px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">SIMAT</span>
+                            </div>
+                            <p className="text-[9px] text-slate-500 leading-tight">
+                              Tipo de discapacidad acreditada o certificada del estudiante
+                            </p>
+                          </div>
+                          <select
+                            name="tipoDiscapacidad"
+                            value={formState.tipoDiscapacidad || ''}
+                            onChange={handleInputChange}
+                            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 cursor-pointer transition-all"
+                          >
+                            <option value="">SELECCIONE TIPO DE DISCAPACIDAD...</option>
+                            <option value="DISCAPACIDAD FÍSICA">DISCAPACIDAD FÍSICA</option>
+                            <option value="DISCAPACIDAD AUDITIVA">DISCAPACIDAD AUDITIVA</option>
+                            <option value="DISCAPACIDAD VISUAL">DISCAPACIDAD VISUAL</option>
+                            <option value="SORDOCEGUERA">SORDOCEGUERA</option>
+                            <option value="DISCAPACIDAD INTELECTUAL">DISCAPACIDAD INTELECTUAL</option>
+                            <option value="DISCAPACIDAD PSICOSOCIAL (MENTAL)">DISCAPACIDAD PSICOSOCIAL (MENTAL)</option>
+                            <option value="DISCAPACIDAD MÚLTIPLE">DISCAPACIDAD MÚLTIPLE</option>
+                            <option value="OTRA">OTRA</option>
+                            <option value="NO APLICA">NO APLICA</option>
+                          </select>
+                        </div>
+
+                        {/* Columna 2: Trastornos de Aprendizaje */}
+                        <div className="bg-white/95 p-3.5 rounded-xl border border-indigo-200/70 shadow-xs flex flex-col justify-between">
+                          <div className="mb-2.5 min-h-[38px]">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <label className="text-[10px] font-extrabold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-indigo-600" />
+                                Trastorno de Aprendizaje / Comportamiento
+                              </label>
+                              <span className="text-[8.5px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">DIAGNÓSTICO</span>
+                            </div>
+                            <p className="text-[9px] text-slate-500 leading-tight">
+                              Dificultades específicas en aprendizaje escolar o atención
+                            </p>
+                          </div>
+                          <select
+                            name="trastornoAprendizaje"
+                            value={formState.trastornoAprendizaje || 'NO APLICA'}
+                            onChange={handleInputChange}
+                            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 cursor-pointer transition-all"
+                          >
+                            <option value="NO APLICA">NO APLICA</option>
+                            <option value="TRASTORNO POR DÉFICIT DE ATENCIÓN CON/SIN HIPERACTIVIDAD">TRASTORNO POR DÉFICIT DE ATENCIÓN (TDA / TDAH)</option>
+                            <option value="TRASTORNOS ESPECÍFICOS DE APRENDIZAJE ESCOLAR">TRASTORNOS ESPECÍFICOS DE APRENDIZAJE ESCOLAR</option>
+                            <option value="TRASTORNOS ESPECÍFICOS DE APRENDIZAJE ESCOLAR Y POR DÉFICIT DE ATENCIÓN">TRASTORNO APRENDIZAJE Y DÉFICIT ATENCIÓN</option>
+                            <option value="OTRO TRASTORNO">OTRO TRASTORNO</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Row 7 */}
                   <div>
@@ -1181,7 +1363,19 @@ const handlePrint = async (s: StudentMatricula) => {
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Parentesco</label>
-                    <select name="acudienteParentesco" value={formState.acudienteParentesco} onChange={e => setFormState(prev => ({...prev, acudienteParentesco: e.target.value}))} className="w-full p-2 border rounded-xl text-xs bg-white text-slate-700 font-semibold">
+                    <select
+                      name="acudienteParentesco"
+                      value={formState.acudienteParentesco}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setFormState(prev => ({
+                          ...prev,
+                          acudienteParentesco: val,
+                          ...(val !== 'OTRO' ? { acudienteParentescoOtro: '' } : {})
+                        }));
+                      }}
+                      className="w-full p-2 border rounded-xl text-xs bg-white text-slate-700 font-semibold"
+                    >
                       <option value="">Seleccione...</option>
                       <option value="MADRE">MADRE</option>
                       <option value="PADRE">PADRE</option>
@@ -1190,6 +1384,17 @@ const handlePrint = async (s: StudentMatricula) => {
                       <option value="ABUELO(A)">ABUELO(A)</option>
                       <option value="OTRO">OTRO</option>
                     </select>
+                    {formState.acudienteParentesco === 'OTRO' && (
+                      <input
+                        type="text"
+                        name="acudienteParentescoOtro"
+                        placeholder="¿Qué parentesco? (Especifique)"
+                        value={formState.acudienteParentescoOtro || ''}
+                        onChange={handleInputChange}
+                        className="w-full mt-1.5 p-1.5 border border-blue-400 bg-blue-50/50 rounded-lg text-xs uppercase text-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        required
+                      />
+                    )}
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Profesión / Oficio</label>
@@ -1209,10 +1414,11 @@ const handlePrint = async (s: StudentMatricula) => {
                 </button>
                 <button
                   type="submit"
-                  className="py-2 px-5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer"
+                  disabled={saving}
+                  className={`py-2 px-5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow transition-all cursor-pointer ${saving ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
-                  <Save className="w-4 h-4" />
-                  {editId ? 'Actualizar Ficha Matrícula' : 'Confirmar Guardado en Base de Datos'}
+                  <Save className={`w-4 h-4 ${saving ? 'animate-spin' : ''}`} />
+                  {saving ? 'Guardando en Base de Datos...' : (editId ? 'Actualizar Ficha Matrícula' : 'Confirmar Guardado en Base de Datos')}
                 </button>
               </div>
 

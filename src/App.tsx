@@ -246,6 +246,27 @@ export default function App() {
         }
       }
 
+      const currentRector = localStorage.getItem('iea_rector_name');
+      if (!currentRector || currentRector.toUpperCase().includes('JARAMILLO')) {
+        localStorage.setItem('iea_rector_name', 'ESP. CARLOS ARCESIO ACOSTA CORONEL');
+        changed = true;
+      }
+
+      try {
+        const configRes = await fetch('/api/config');
+        if (configRes.ok) {
+          const cfg = await configRes.json();
+          if (cfg && cfg.config && cfg.config.rectorName) {
+            localStorage.setItem('iea_rector_name', cfg.config.rectorName);
+          }
+          if (cfg && cfg.config && cfg.config.rectorCargo) {
+            localStorage.setItem('iea_rector_cargo', cfg.config.rectorCargo);
+          }
+        }
+      } catch (e) {
+        // ignore offline config fetch
+      }
+
       if (changed) {
         window.dispatchEvent(new Event('iea_config_updated'));
       }
