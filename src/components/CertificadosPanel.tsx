@@ -104,7 +104,7 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
   const [formName, setFormName] = useState('');
   const [formDocumento, setFormDocumento] = useState('');
   const [formTipoDoc, setFormTipoDoc] = useState('TI');
-  const [formGrado, setFormGrado] = useState('TERCERO (3°)');
+  const [formGrado, setFormGrado] = useState('TERCERO 3°');
   const [formJornada, setFormJornada] = useState('ÚNICA');
   const [formComportamiento, setFormComportamiento] = useState('SUPERIOR');
 
@@ -254,6 +254,20 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
              grado = 'SEXTO (6°)';
           } else if (grado.includes('5') || grado.includes('QUINTO')) {
              grado = 'QUINTO (5°)';
+          } else if (grado.includes('4') || grado.includes('CUARTO')) {
+             grado = 'CUARTO (4°)';
+          } else if (grado.includes('3') || grado.includes('TERCERO')) {
+             grado = 'TERCERO (3°)';
+          } else if (grado.includes('2') || grado.includes('SEGUNDO')) {
+             grado = 'SEGUNDO (2°)';
+          } else if (grado.includes('1') || grado.includes('PRIMERO')) {
+             grado = 'PRIMERO 1°';
+          } else if (grado.includes('PREJARDIN') || grado.includes('PREJARDÍN')) {
+             grado = 'PREJARDÍN';
+          } else if (grado.includes('JARDIN') || grado.includes('JARDÍN')) {
+             grado = 'JARDÍN -0°';
+          } else if (grado.includes('TRANSICION') || grado.includes('TRANSICIÓN') || grado.includes('0')) {
+             grado = 'TRANSICIÓN 0°';
           }
 
           const notasObj: Record<string, NotaDetalle> = {};
@@ -507,7 +521,7 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
     setFormName('');
     setFormDocumento('');
     setFormTipoDoc('TI');
-    setFormGrado('TERCERO (3°)');
+    setFormGrado('TERCERO 3°');
     setFormJornada('ÚNICA');
     setFormComportamiento('SUPERIOR');
     setFormNotas([{ materia: '', ihs: '', nota: '' }]);
@@ -621,33 +635,145 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
       .replace(/[\u0300-\u036f]/g, "");
   };
 
+  const formatearGradoConNumero = (grado: string): string => {
+    if (!grado) return "";
+    const g = normalizarTexto(grado);
+
+    if (g.includes("CICLO VI") || g.includes("CICLO 6")) return "CICLO VI";
+    if (g.includes("CICLO V") || g.includes("CICLO 5")) return "CICLO V";
+    if (g.includes("CICLO IV") || g.includes("CICLO 4")) return "CICLO IV";
+    if (g.includes("CICLO III") || g.includes("CICLO 3")) return "CICLO III";
+    if (g.includes("CICLO II") || g.includes("CICLO 2")) return "CICLO II";
+    if (g.includes("CICLO I") || g.includes("CICLO 1")) return "CICLO I";
+
+    // Preescolar previo (verificar antes de números para evitar colisión con -0° o -1°)
+    if (g.includes("PREJARDIN")) {
+      return "PREJARDÍN";
+    }
+    if (g.includes("JARDIN")) {
+      return "JARDÍN -0°";
+    }
+
+    if (g.includes("UNDECIMO") || g.includes("ONCE") || /(^|[^\d])11([^\d]|$)/.test(g)) {
+      return "UNDÉCIMO 11°";
+    }
+    if (g.includes("DECIMO") || /(^|[^\d])10([^\d]|$)/.test(g)) {
+      return "DÉCIMO 10°";
+    }
+    if (g.includes("NOVENO") || /(^|[^\d])9([^\d]|$)/.test(g)) {
+      return "NOVENO 9°";
+    }
+    if (g.includes("OCTAVO") || /(^|[^\d])8([^\d]|$)/.test(g)) {
+      return "OCTAVO 8°";
+    }
+    if (g.includes("SEPTIMO") || /(^|[^\d])7([^\d]|$)/.test(g)) {
+      return "SÉPTIMO 7°";
+    }
+    if (g.includes("SEXTO") || /(^|[^\d])6([^\d]|$)/.test(g)) {
+      return "SEXTO 6°";
+    }
+    if (g.includes("QUINTO") || /(^|[^\d])5([^\d]|$)/.test(g)) {
+      return "QUINTO 5°";
+    }
+    if (g.includes("CUARTO") || /(^|[^\d])4([^\d]|$)/.test(g)) {
+      return "CUARTO 4°";
+    }
+    if (g.includes("TERCERO") || /(^|[^\d])3([^\d]|$)/.test(g)) {
+      return "TERCERO 3°";
+    }
+    if (g.includes("SEGUNDO") || /(^|[^\d])2([^\d]|$)/.test(g)) {
+      return "SEGUNDO 2°";
+    }
+    if (g.includes("PRIMERO") || /(^|[^\d])1([^\d]|$)/.test(g)) {
+      return "PRIMERO 1°";
+    }
+    if (g.includes("TRANSICION") || /(^|[^\d])0([^\d]|$)/.test(g)) {
+      return "TRANSICIÓN 0°";
+    }
+
+    return grado.trim().toUpperCase();
+  };
+
   const calcularPromovido = (grado: string): string => {
     if (!grado) return "GRADUADO";
     const g = normalizarTexto(grado);
-    const mapaPromociones: Record<string, string> = {
-      "PREJARDÍN": "JARDÍN (-1°)",
-      "JARDÍN": "TRANSICIÓN (0°)", 
-      "TRANSICIÓN": "PRIMERO (1°)",
-      "PRIMERO": "SEGUNDO (2°)",
-      "SEGUNDO": "TERCERO (3°)",
-      "TERCERO": "CUARTO (4°)",
-      "CUARTO": "QUINTO (5°)",
-      "QUINTO": "SEXTO (6°)",
-      "SEXTO": "SÉPTIMO (7°)",
-      "SÉPTIMO": "OCTAVO (8°)",
-      "OCTAVO": "NOVENO (9°)",
-      "NOVENO": "DÉCIMO (10°)",
-      "DÉCIMO": "UNDÉCIMO (11°)",
-      "UNDÉCIMO": "GRADUADO",
-      "CICLO I": "CICLO II",
-      "CICLO II": "CICLO III", 
-      "CICLO III": "CICLO IV",
-      "CICLO IV": "CICLO V",
-      "CICLO V": "CICLO VI",
-      "CICLO VI": "GRADUADO"
-    };
 
-    if (mapaPromociones[g]) return mapaPromociones[g];
+    // Ciclos nocturna / adultos
+    if (g.includes("CICLO VI") || g.includes("CICLO 6")) return "GRADUADO";
+    if (g.includes("CICLO V") || g.includes("CICLO 5")) return "CICLO VI";
+    if (g.includes("CICLO IV") || g.includes("CICLO 4")) return "CICLO V";
+    if (g.includes("CICLO III") || g.includes("CICLO 3")) return "CICLO IV";
+    if (g.includes("CICLO II") || g.includes("CICLO 2")) return "CICLO III";
+    if (g.includes("CICLO I") || g.includes("CICLO 1")) return "CICLO II";
+
+    // Preescolar previo (verificar antes de números para evitar colisión con -0° o -1°)
+    if (g.includes("PREJARDIN")) {
+      return "JARDÍN -0°";
+    }
+    if (g.includes("JARDIN")) {
+      return "TRANSICIÓN 0°";
+    }
+
+    // Grado 11° (Undécimo / Once) -> Graduado
+    if (g.includes("UNDECIMO") || g.includes("ONCE") || /(^|[^\d])11([^\d]|$)/.test(g)) {
+      return "GRADUADO";
+    }
+
+    // Grado 10° (Décimo) -> Promovido a UNDÉCIMO 11°
+    if (g.includes("DECIMO") || /(^|[^\d])10([^\d]|$)/.test(g)) {
+      return "UNDÉCIMO 11°";
+    }
+
+    // Grado 9° (Noveno) -> Promovido a DÉCIMO 10°
+    if (g.includes("NOVENO") || /(^|[^\d])9([^\d]|$)/.test(g)) {
+      return "DÉCIMO 10°";
+    }
+
+    // Grado 8° (Octavo) -> Promovido a NOVENO 9°
+    if (g.includes("OCTAVO") || /(^|[^\d])8([^\d]|$)/.test(g)) {
+      return "NOVENO 9°";
+    }
+
+    // Grado 7° (Séptimo) -> Promovido a OCTAVO 8°
+    if (g.includes("SEPTIMO") || /(^|[^\d])7([^\d]|$)/.test(g)) {
+      return "OCTAVO 8°";
+    }
+
+    // Grado 6° (Sexto) -> Promovido a SÉPTIMO 7°
+    if (g.includes("SEXTO") || /(^|[^\d])6([^\d]|$)/.test(g)) {
+      return "SÉPTIMO 7°";
+    }
+
+    // Grado 5° (Quinto) -> Promovido a SEXTO 6°
+    if (g.includes("QUINTO") || /(^|[^\d])5([^\d]|$)/.test(g)) {
+      return "SEXTO 6°";
+    }
+
+    // Grado 4° (Cuarto) -> Promovido a QUINTO 5°
+    if (g.includes("CUARTO") || /(^|[^\d])4([^\d]|$)/.test(g)) {
+      return "QUINTO 5°";
+    }
+
+    // Grado 3° (Tercero) -> Promovido a CUARTO 4°
+    if (g.includes("TERCERO") || /(^|[^\d])3([^\d]|$)/.test(g)) {
+      return "CUARTO 4°";
+    }
+
+    // Grado 2° (Segundo) -> Promovido a TERCERO 3°
+    if (g.includes("SEGUNDO") || /(^|[^\d])2([^\d]|$)/.test(g)) {
+      return "TERCERO 3°";
+    }
+
+    // Grado 1° (Primero) -> Promovido a SEGUNDO 2°
+    if (g.includes("PRIMERO") || /(^|[^\d])1([^\d]|$)/.test(g)) {
+      return "SEGUNDO 2°";
+    }
+
+    // Grado 0° (Transición) -> Promovido a PRIMERO 1°
+    if (g.includes("TRANSICION") || /(^|[^\d])0([^\d]|$)/.test(g)) {
+      return "PRIMERO 1°";
+    }
+
     return "GRADUADO";
   };
 
@@ -729,10 +855,11 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
     let currentLineWidth = 0;
 
     words.forEach(word => {
-      const cleanWord = word.replace(/[^A-ZÁÉÍÓÚÜÑ]/gi, "");
+      const cleanWord = word.replace(/[^A-Z0-9ÁÉÍÓÚÜÑ°\-]/gi, "").toUpperCase();
       const isBold = boldWords.some(boldWord => {
-        const cleanBold = boldWord.replace(/[^A-ZÁÉÍÓÚÜÑ]/gi, "");
-        return cleanWord === cleanBold || word.includes(boldWord);
+        if (!boldWord) return false;
+        const cleanBold = boldWord.replace(/[^A-Z0-9ÁÉÍÓÚÜÑ°\-]/gi, "").toUpperCase();
+        return (cleanBold && cleanWord === cleanBold) || (cleanBold && cleanWord.includes(cleanBold)) || word.includes(boldWord);
       });
       
       doc.setFont("helvetica", isBold ? "bold" : "normal");
@@ -863,11 +990,13 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
       // Paragraph transcript
       let y = 78;
       doc.setFontSize(10);
+      const gradoFormateado = formatearGradoConNumero(s.grado);
       const docText = s.documento ? ` identificado(a) con ${s.tipo_documento || 'TI'} ${s.documento}` : '';
-      const parrafo = `Que el(la) estudiante ${s.nombre}${docText}, cursó y aprobó el grado ${s.grado}, jornada ${s.jornada}, durante el año lectivo ${s.anio}, con la siguiente intensidad horaria y juicios valorativos:`;
+      const parrafo = `Que el(la) estudiante ${s.nombre}${docText}, cursó y aprobó el grado ${gradoFormateado}, jornada ${s.jornada}, durante el año lectivo ${s.anio}, con la siguiente intensidad horaria y juicios valorativos:`;
 
       const nombrePartes = s.nombre.split(' ');
-      y = drawJustifiedText(doc, parrafo, 15, y, 180, 6, [...nombrePartes, s.grado, s.jornada, s.documento].filter(Boolean));
+      const gradoPartes = gradoFormateado.split(' ');
+      y = drawJustifiedText(doc, parrafo, 15, y, 180, 6, [...nombrePartes, ...gradoPartes, gradoFormateado, s.grado, s.jornada, s.documento].filter(Boolean));
 
       // Academics Table
       const materiasRows = s.notas ? Object.entries(s.notas).map(([mat, d]) => [
@@ -910,7 +1039,7 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
       if (promovido === "GRADUADO") {
         doc.text("OBSERVACIÓN: El estudiante fue GRADUADO.", 15, y);
       } else {
-        doc.text(`OBSERVACIÓN: Promovido al grado ${promovido}.`, 15, y);
+        doc.text(`OBSERVACIÓN: El estudiante fue PROMOVIDO al grado ${promovido}.`, 15, y);
       }
       doc.setFont("helvetica", "normal");
       y += 12;
@@ -1150,7 +1279,7 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
                           </span>
                         </td>
                         <td className="p-4">
-                          <p className="font-extrabold text-slate-800">{student.grado}</p>
+                          <p className="font-extrabold text-slate-800">{formatearGradoConNumero(student.grado)}</p>
                           <span className="text-[9px] text-slate-400 uppercase font-black tracking-wide">{student.jornada || 'ÚNICA'}</span>
                         </td>
                         <td className="p-4 font-semibold">
@@ -1361,19 +1490,19 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
                     className="w-full p-2 border rounded-xl text-xs bg-white text-emerald-950 font-bold"
                   >
                     <option>PREJARDÍN</option>
-                    <option>JARDÍN (-1°)</option>
-                    <option>TRANSICIÓN (0°)</option>
-                    <option>PRIMERO (1°)</option>
-                    <option>SEGUNDO (2°)</option>
-                    <option>TERCERO (3°)</option>
-                    <option>CUARTO (4°)</option>
-                    <option>QUINTO (5°)</option>
-                    <option>SEXTO (6°)</option>
-                    <option>SÉPTIMO (7°)</option>
-                    <option>OCTAVO (8°)</option>
-                    <option>NOVENO (9°)</option>
-                    <option>DÉCIMO (10°)</option>
-                    <option>UNDÉCIMO (11°)</option>
+                    <option>JARDÍN -0°</option>
+                    <option>TRANSICIÓN 0°</option>
+                    <option>PRIMERO 1°</option>
+                    <option>SEGUNDO 2°</option>
+                    <option>TERCERO 3°</option>
+                    <option>CUARTO 4°</option>
+                    <option>QUINTO 5°</option>
+                    <option>SEXTO 6°</option>
+                    <option>SÉPTIMO 7°</option>
+                    <option>OCTAVO 8°</option>
+                    <option>NOVENO 9°</option>
+                    <option>DÉCIMO 10°</option>
+                    <option>UNDÉCIMO 11°</option>
                     <option>CICLO I</option>
                     <option>CICLO II</option>
                     <option>CICLO III</option>
@@ -1700,7 +1829,7 @@ export default function CertificadosPanel({ hasPermission }: { hasPermission?: (
                             <tr key={index} className="hover:bg-slate-50">
                               <td className="p-3 font-mono text-slate-500 text-[10px] font-bold">{student.tipo_documento}-{student.documento}</td>
                               <td className="p-3 font-extrabold text-slate-900 text-[11px]">{student.nombre}</td>
-                              <td className="p-3 font-bold text-slate-600 text-[10px]">{student.grado}</td>
+                              <td className="p-3 font-bold text-slate-600 text-[10px]">{formatearGradoConNumero(student.grado)}</td>
                               <td className="p-3"><span className="bg-blue-50 text-blue-700 border border-blue-100 font-bold px-2 py-0.5 rounded text-[10px]">{student.anio}</span></td>
                               <td className="p-3">
                                 <span className="bg-emerald-50 text-emerald-800 border border-emerald-100 font-black px-2 py-0.5 rounded-full text-[10px]">
