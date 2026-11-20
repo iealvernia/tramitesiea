@@ -356,8 +356,10 @@ async function ensureDbTables() {
         grado_cod TEXT,
         grado_texto TEXT,
         fecha_inicio TEXT,
+        nota TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      ALTER TABLE alvernia_constancias ADD COLUMN IF NOT EXISTS nota TEXT;
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS alvernia_agenda_eventos (
