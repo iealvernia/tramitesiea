@@ -10,7 +10,12 @@ import {
   X, 
   Save, 
   AlertCircle,
-  Upload
+  Upload,
+  FileDown,
+  RotateCcw,
+  Sparkles,
+  CheckCircle2,
+  FileCheck
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
@@ -32,6 +37,7 @@ interface StudentConstancia {
   grado_cod: string;
   grado_texto: string;
   fecha_inicio?: string;
+  nota?: string;
   created_at?: string;
 }
 
@@ -97,8 +103,18 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
     jornada: 'ÚNICA',
     grado_cod: '1',
     grado_texto: 'PRIMERO',
-    fecha_inicio: new Date().toISOString().substring(0, 10)
+    fecha_inicio: new Date().toISOString().substring(0, 10),
+    nota: ''
   });
+
+  // Modal for Customizing & Generating PDF
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printStudent, setPrintStudent] = useState<StudentConstancia | null>(null);
+  const [customTexto, setCustomTexto] = useState('');
+  const [customNota, setCustomNota] = useState('');
+  const [customFirma, setCustomFirma] = useState('');
+  const [saveNotaOnPrint, setSaveNotaOnPrint] = useState(true);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -111,7 +127,7 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
       setErrorErrorMsg(null);
     } catch (err: any) {
       console.error('Error fetching constancias:', err);
-      setErrorErrorMsg('No se pudieron cargar las constancias de matrimonio. Compruebe la conexión o las tablas.');
+      setErrorErrorMsg('No se pudieron cargar las constancias de matrícula. Compruebe la conexión o las tablas.');
     } finally {
       setLoading(false);
     }
@@ -133,14 +149,18 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
       jornada: 'ÚNICA',
       grado_cod: '1',
       grado_texto: 'PRIMERO',
-      fecha_inicio: new Date().toISOString().substring(0, 10)
+      fecha_inicio: new Date().toISOString().substring(0, 10),
+      nota: ''
     });
     setShowModal(true);
   };
 
   const handleOpenEdit = (student: StudentConstancia) => {
     setEditId(student.id || null);
-    setFormState({ ...student });
+    setFormState({ 
+      ...student,
+      nota: student.nota || ''
+    });
     setShowModal(true);
   };
 
@@ -399,7 +419,7 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
     loadData();
   };
 
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormState(prev => {
       const updated = { ...prev, [name]: name === 'nombre_completo' ? value.toUpperCase() : value };
@@ -475,113 +495,159 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
     }
   };
 
-  // Word-by-word bold highlighting justified text drawer
+  // Generate standard certification wording for a student
+  const generarTextoConstanciaDefault = (s: StudentConstancia): string => {
+    const fechaInicioFormateada = formatFechaSlash(s.fecha_inicio);
+    const añoEscolar = s.anio || "2025";
+    const nombreCompleto = (s.nombre_completo || "").toUpperCase();
+    const tipoDoc = s.tipo_documento || "TI";
+    const numDoc = s.documento || "";
+    const grado = (s.grado_texto || "").toUpperCase();
+    const jornada = (s.jornada || "").toUpperCase();
+    const sede = (s.sede || "").toUpperCase();
+    return `Que el(la) estudiante **${nombreCompleto}** identificado(a) con ${tipoDoc} Nro. ${numDoc} se encuentra legalmente matriculado(a) y cursando el grado ${grado} jornada ${jornada} sede ${sede} desde el ${fechaInicioFormateada} correspondiente al año escolar ${añoEscolar}.`;
+  };
+
+  const generarTextoFirmaDefault = (): string => {
+    const hoy = new Date();
+    const dia = hoy.getDate();
+    const mes = MESES[hoy.getMonth()];
+    const año = hoy.getFullYear();
+    return `Para Constancia se firma en Puerto Asís a los ${dia} de ${mes} del año ${año}.`;
+  };
+
+  const handleOpenPrintModal = (student: StudentConstancia) => {
+    setPrintStudent(student);
+    setCustomTexto(generarTextoConstanciaDefault(student));
+    setCustomNota(student.nota || '');
+    setCustomFirma(generarTextoFirmaDefault());
+    setSaveNotaOnPrint(true);
+    setShowPrintModal(true);
+  };
+
+  // Word-by-word bold highlighting justified text drawer (supports multi-paragraphs)
   const drawJustifiedTextWithBold = (doc: jsPDF, text: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
     
-    // Split bold parts
-    const parts: { text: string; bold: boolean }[] = [];
-    let currentText = text;
-    
-    while (currentText.includes('**')) {
-      const startIndex = currentText.indexOf('**');
-      const endIndex = currentText.indexOf('**', startIndex + 2);
+    const paragraphs = (text || "").split(/\r?\n/).filter(p => p.trim() !== "");
+    if (paragraphs.length === 0) return y;
+
+    let currentY = y;
+
+    for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
+      const paragraph = paragraphs[pIdx];
+
+      // Split bold parts
+      const parts: { text: string; bold: boolean }[] = [];
+      let currentText = paragraph;
       
-      if (endIndex === -1) break;
-      
-      if (startIndex > 0) {
+      while (currentText.includes('**')) {
+        const startIndex = currentText.indexOf('**');
+        const endIndex = currentText.indexOf('**', startIndex + 2);
+        
+        if (endIndex === -1) break;
+        
+        if (startIndex > 0) {
+          parts.push({
+            text: currentText.substring(0, startIndex),
+            bold: false
+          });
+        }
+        
         parts.push({
-          text: currentText.substring(0, startIndex),
+          text: currentText.substring(startIndex + 2, endIndex),
+          bold: true
+        });
+        
+        currentText = currentText.substring(endIndex + 2);
+      }
+      
+      if (currentText.length > 0) {
+        parts.push({
+          text: currentText,
           bold: false
         });
       }
       
-      parts.push({
-        text: currentText.substring(startIndex + 2, endIndex),
-        bold: true
-      });
+      // Create text lines
+      const lines: any[][] = [];
+      let currentLine: any[] = [];
+      let currentLineWidth = 0;
       
-      currentText = currentText.substring(endIndex + 2);
-    }
-    
-    if (currentText.length > 0) {
-      parts.push({
-        text: currentText,
-        bold: false
-      });
-    }
-    
-    // Create text lines
-    const lines: any[][] = [];
-    let currentLine: any[] = [];
-    let currentLineWidth = 0;
-    
-    for (const part of parts) {
-      const words = part.text.split(' ');
-      
-      for (const word of words) {
-        if (!word && word !== '0') continue;
-        const wordWidth = doc.getTextWidth(word + ' ');
+      for (const part of parts) {
+        const words = part.text.split(' ');
         
-        if (currentLineWidth + wordWidth > maxWidth && currentLine.length > 0) {
-          lines.push([...currentLine]);
-          currentLine = [{ text: word, bold: part.bold }];
-          currentLineWidth = wordWidth;
-        } else {
-          currentLine.push({ text: word, bold: part.bold });
-          currentLineWidth += wordWidth;
-        }
-      }
-    }
-    
-    if (currentLine.length > 0) {
-      lines.push(currentLine);
-    }
-    
-    let currentY = y;
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const isLastLine = (i === lines.length - 1);
-      
-      if (isLastLine || line.length <= 1) {
-        // Last line or single word line - no justification
-        let currentX = x;
-        for (const part of line) {
-          doc.setFont("helvetica", part.bold ? "bold" : "normal");
-          doc.text(part.text + (part !== line[line.length - 1] ? ' ' : ''), currentX, currentY);
-          currentX += doc.getTextWidth(part.text + ' ');
-        }
-      } else {
-        // Justify
-        let totalTextWidth = 0;
-        for (const part of line) {
-          totalTextWidth += doc.getTextWidth(part.text);
-        }
-        
-        const totalSpaceWidth = maxWidth - totalTextWidth;
-        const spaceBetweenWords = totalSpaceWidth / (line.length - 1);
-        
-        let currentX = x;
-        for (let j = 0; j < line.length; j++) {
-          const part = line[j];
-          doc.setFont("helvetica", part.bold ? "bold" : "normal");
-          doc.text(part.text, currentX, currentY);
+        for (const word of words) {
+          if (!word && word !== '0') continue;
+          const wordWidth = doc.getTextWidth(word + ' ');
           
-          if (j < line.length - 1) {
-            currentX += doc.getTextWidth(part.text) + spaceBetweenWords;
+          if (currentLineWidth + wordWidth > maxWidth && currentLine.length > 0) {
+            lines.push([...currentLine]);
+            currentLine = [{ text: word, bold: part.bold }];
+            currentLineWidth = wordWidth;
+          } else {
+            currentLine.push({ text: word, bold: part.bold });
+            currentLineWidth += wordWidth;
           }
         }
       }
       
-      currentY += lineHeight;
+      if (currentLine.length > 0) {
+        lines.push(currentLine);
+      }
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const isLastLine = (i === lines.length - 1);
+        
+        if (isLastLine || line.length <= 1) {
+          // Last line or single word line - no justification
+          let currentX = x;
+          for (const part of line) {
+            doc.setFont("helvetica", part.bold ? "bold" : "normal");
+            doc.text(part.text + (part !== line[line.length - 1] ? ' ' : ''), currentX, currentY);
+            currentX += doc.getTextWidth(part.text + ' ');
+          }
+        } else {
+          // Justify
+          let totalTextWidth = 0;
+          for (const part of line) {
+            totalTextWidth += doc.getTextWidth(part.text);
+          }
+          
+          const totalSpaceWidth = maxWidth - totalTextWidth;
+          const spaceBetweenWords = totalSpaceWidth / (line.length - 1);
+          
+          let currentX = x;
+          for (let j = 0; j < line.length; j++) {
+            const part = line[j];
+            doc.setFont("helvetica", part.bold ? "bold" : "normal");
+            doc.text(part.text, currentX, currentY);
+            
+            if (j < line.length - 1) {
+              currentX += doc.getTextWidth(part.text) + spaceBetweenWords;
+            }
+          }
+        }
+        
+        currentY += lineHeight;
+      }
+
+      if (pIdx < paragraphs.length - 1) {
+        currentY += 3;
+      }
     }
     
     return currentY;
   };
 
-  const handlePrint = async (s: StudentConstancia) => {
+  const handlePrint = async (
+    s: StudentConstancia,
+    customTextoOverride?: string,
+    customNotaOverride?: string,
+    customFirmaOverride?: string
+  ) => {
     try {
       const doc = new jsPDF();
       doc.setFont("helvetica");
@@ -667,32 +733,34 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
       doc.setFontSize(12);
       doc.text("HACE CONSTAR", pageWidth / 2, yPos, { align: 'center' });
 
-      const fechaInicioFormateada = formatFechaSlash(s.fecha_inicio);
       const añoEscolar = s.anio || "2025";
-      
-      const nombreCompleto = s.nombre_completo.toUpperCase();
-      const tipoDoc = s.tipo_documento || "TI";
-      const numDoc = s.documento || "";
-      const grado = s.grado_texto.toUpperCase();
-      const jornada = s.jornada.toUpperCase();
-      const sede = s.sede.toUpperCase();
-
       yPos += 15;
-      const textoConMarcadores = `Que el(la) estudiante **${nombreCompleto}** identificado(a) con ${tipoDoc} Nro. ${numDoc} se encuentra legalmente matriculado(a) y cursando el grado ${grado} jornada ${jornada} sede ${sede} desde el ${fechaInicioFormateada} correspondiente al año escolar ${añoEscolar}.`;
+
+      // Texto Principal (personalizado o predeterminado)
+      const textoConMarcadores = customTextoOverride !== undefined && customTextoOverride.trim() !== ''
+        ? customTextoOverride.trim()
+        : generarTextoConstanciaDefault(s);
       
       yPos = drawJustifiedTextWithBold(doc, textoConMarcadores, marginLeft, yPos, contentWidth, 6);
 
+      // Nota / Observación adicional (si existe)
+      const notaFinal = (customNotaOverride !== undefined ? customNotaOverride : (s.nota || '')).trim();
+      if (notaFinal) {
+        yPos += 7;
+        const notaConMarcador = /^nota\b/i.test(notaFinal)
+          ? `**${notaFinal.substring(0, 5)}**${notaFinal.substring(5)}`
+          : `**NOTA:** ${notaFinal}`;
+        yPos = drawJustifiedTextWithBold(doc, notaConMarcador, marginLeft, yPos, contentWidth, 5.5);
+      }
+
       // Signature and Date (no italics)
-      yPos += 15;
+      yPos += 14;
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
       
-      const hoy = new Date();
-      const dia = hoy.getDate();
-      const mes = MESES[hoy.getMonth()];
-      const año = hoy.getFullYear();
-      
-      const textoFirma = `Para Constancia se firma en Puerto Asís a los ${dia} de ${mes} del año ${año}.`;
+      const textoFirma = customFirmaOverride !== undefined && customFirmaOverride.trim() !== ''
+        ? customFirmaOverride.trim()
+        : generarTextoFirmaDefault();
       doc.text(textoFirma, marginLeft, yPos, { align: 'left' });
 
       // Rector details from dynamic configuration
@@ -700,7 +768,7 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
       const rectorDoc = localStorage.getItem('iea_rector_doc') || "C.C. No. 87.246.722 de La Cruz";
       const customSignature = localStorage.getItem('iea_custom_signature') || '';
 
-      yPos += 50; // Add space for manual signature locally (fully synchronous render)
+      yPos += 50; // Add space for manual signature locally
 
       if (customSignature) {
         try {
@@ -738,6 +806,36 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
     } catch (e: any) {
       console.error('Constancia generation failed:', e);
       alert('Error generando constancia PDF: ' + e.message);
+    }
+  };
+
+  const handleConfirmGenerateFromModal = async () => {
+    if (!printStudent) return;
+    setIsGeneratingPdf(true);
+    try {
+      // 1. Generate PDF with custom contents
+      await handlePrint(printStudent, customTexto, customNota, customFirma);
+
+      // 2. Save note to DB if opted in and changed
+      if (saveNotaOnPrint && printStudent.id && customNota.trim() !== (printStudent.nota || '').trim()) {
+        const updatedStudent = { ...printStudent, nota: customNota.trim() };
+        try {
+          await fetch('/api/constancias', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedStudent)
+          });
+          setStudents(prev => prev.map(item => item.id === printStudent.id ? updatedStudent : item));
+        } catch (dbErr) {
+          console.error("Error guardando nota en base de datos:", dbErr);
+        }
+      }
+
+      setShowPrintModal(false);
+    } catch (err: any) {
+      alert('Error al generar la constancia: ' + err.message);
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
@@ -869,6 +967,17 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
                         <span className="font-mono text-[9px] text-slate-400 font-bold uppercase tracking-wide">
                           {student.tipo_documento || 'CC'}-{student.documento}
                         </span>
+                        {student.nota && (
+                          <div className="mt-1">
+                            <span 
+                              title={`Nota: ${student.nota}`} 
+                              className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md truncate max-w-[220px]"
+                            >
+                              <FileText className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                              <span className="truncate">Nota: {student.nota}</span>
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="p-4">
                         <p className="font-extrabold text-slate-800">{student.grado_texto}</p>
@@ -882,8 +991,9 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
                       </td>
                       <td className="p-3 text-center">
                         <button
-                          onClick={() => handlePrint(student)}
-                          className="bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-[10px] py-1.5 px-3 rounded-lg border border-teal-200 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                          onClick={() => handleOpenPrintModal(student)}
+                          className="bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-[10px] py-1.5 px-3 rounded-lg border border-teal-200 inline-flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                          title="Personalizar texto y generar PDF"
                         >
                           <Printer className="w-3.5 h-3.5" />
                           Generar Constancia
@@ -1065,6 +1175,21 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
                       className="w-full p-2 border rounded-xl text-xs font-mono font-bold"
                     />
                   </div>
+
+                  <div className="md:col-span-4">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1 flex items-center justify-between">
+                      <span>Nota / Observación Adicional en la Constancia (Opcional)</span>
+                      <span className="text-[9px] text-teal-700 font-semibold">Se reflejará en el formato impreso</span>
+                    </label>
+                    <textarea
+                      name="nota"
+                      value={formState.nota || ''}
+                      onChange={handleFormChange}
+                      rows={2}
+                      placeholder="Ej: Se expide la presente constancia a solicitud de la parte interesada para los fines pertinentes..."
+                      className="w-full p-2.5 border rounded-xl text-xs bg-white text-slate-800 focus:ring-2 focus:ring-teal-500 outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1087,6 +1212,282 @@ export default function ConstanciasPanel({ hasPermission }: { hasPermission?: (m
               </div>
 
             </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PERSONALIZAR Y GENERAR CONSTANCIA DE ESTUDIO */}
+      {showPrintModal && printStudent && (
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 overflow-y-auto flex items-start justify-center p-3 sm:p-5 pt-8">
+          <div className="bg-white rounded-3xl w-full max-w-5xl shadow-2xl border border-slate-200 overflow-hidden mb-12 flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-teal-900 via-teal-800 to-emerald-900 p-5 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/15">
+                  <FileText className="w-5 h-5 text-teal-200" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base leading-tight">Personalizar y Generar Constancia de Estudio</h3>
+                  <p className="text-[11px] text-teal-200 mt-0.5">
+                    Estudiante: <strong className="text-white uppercase">{printStudent.nombre_completo}</strong> ({printStudent.tipo_documento || 'CC'}: {printStudent.documento}) | Año: {printStudent.anio || '2026'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPrintModal(false)}
+                className="text-teal-200 hover:text-white p-1.5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-50/50">
+              
+              {/* Left Column: Editor controls (7 cols) */}
+              <div className="lg:col-span-7 space-y-4">
+                
+                {/* 1. Main certification paragraph */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                      <span className="w-2 h-2 bg-teal-600 rounded-full inline-block" />
+                      1. Contenido Principal de la Constancia
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setCustomTexto(generarTextoConstanciaDefault(printStudent))}
+                      className="text-[10px] text-teal-700 hover:text-teal-900 font-bold inline-flex items-center gap-1 hover:underline cursor-pointer"
+                      title="Volver al texto estándar de la institución"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Restablecer texto original
+                    </button>
+                  </div>
+                  <textarea
+                    value={customTexto}
+                    onChange={e => setCustomTexto(e.target.value)}
+                    rows={5}
+                    className="w-full p-3 border border-slate-300 rounded-xl text-xs text-slate-800 leading-relaxed font-normal focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+                    placeholder="Escriba o modifique el texto de certificación..."
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                    <span>Puedes editar libremente. Coloca <strong>**palabra**</strong> para resaltar en negrilla oficial.</span>
+                  </p>
+                </div>
+
+                {/* 2. Nota / Observación adicional */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                      <span className="w-2 h-2 bg-amber-500 rounded-full inline-block" />
+                      2. Nota / Observación Adicional
+                    </label>
+                    {customNota && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomNota('')}
+                        className="text-[10px] text-rose-600 hover:underline cursor-pointer font-bold"
+                      >
+                        Limpiar nota
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    value={customNota}
+                    onChange={e => setCustomNota(e.target.value)}
+                    rows={2}
+                    className="w-full p-3 border border-slate-300 rounded-xl text-xs text-slate-800 leading-relaxed font-normal focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+                    placeholder="Ej: Se expide la presente constancia a solicitud de la parte interesada para los fines pertinentes..."
+                  />
+                  
+                  {/* Quick Suggestions Pills */}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mr-1">Sugerencias rápidas:</span>
+                    {[
+                      { label: "Solicitud del interesado", text: "Se expide la presente constancia a solicitud de la parte interesada para los fines pertinentes." },
+                      { label: "Afiliación EPS / Salud", text: "Se expide para efectos de trámites de afiliación y actualización de servicios de salud." },
+                      { label: "Subsidio Familiar", text: "Se expide para trámites y cobro de subsidio familiar." },
+                      { label: "Pasaporte / Trámite consular", text: "Se expide para trámites consulares y de pasaporte." }
+                    ].map((sug, sIdx) => (
+                      <button
+                        key={sIdx}
+                        type="button"
+                        onClick={() => setCustomNota(sug.text)}
+                        className="text-[9px] bg-slate-100 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-200 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                      >
+                        + {sug.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Save to DB checkbox */}
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="saveNotaDbCheck"
+                      checked={saveNotaOnPrint}
+                      onChange={e => setSaveNotaOnPrint(e.target.checked)}
+                      className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500 cursor-pointer"
+                    />
+                    <label htmlFor="saveNotaDbCheck" className="text-xs text-slate-600 select-none cursor-pointer font-medium">
+                      Guardar esta nota en la ficha del estudiante en la base de datos
+                    </label>
+                  </div>
+                </div>
+
+                {/* 3. Lugar y Fecha de Expedición */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                  <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wide block mb-1.5 flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-indigo-500 rounded-full inline-block" />
+                    3. Frase de Expedición y Fecha de Firma
+                  </label>
+                  <input
+                    type="text"
+                    value={customFirma}
+                    onChange={e => setCustomFirma(e.target.value)}
+                    className="w-full p-2.5 border border-slate-300 rounded-xl text-xs text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="Ej: Para Constancia se firma en Puerto Asís..."
+                  />
+                </div>
+
+              </div>
+
+              {/* Right Column: Live Sheet Preview (5 cols) */}
+              <div className="lg:col-span-5 flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-extrabold uppercase text-slate-600 tracking-wide flex items-center gap-1.5">
+                    <FileCheck className="w-4 h-4 text-teal-600" />
+                    Vista Previa en Tiempo Real
+                  </span>
+                  <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-md border border-emerald-200">
+                    Formato Oficial I.E. Alvernia
+                  </span>
+                </div>
+
+                {/* Document Sheet Simulation */}
+                <div className="bg-white rounded-2xl border border-slate-300 shadow-md p-6 text-[10px] text-slate-800 flex-1 flex flex-col justify-between space-y-4 font-serif">
+                  
+                  {/* Sheet Header */}
+                  <div>
+                    <div className="text-center space-y-0.5 font-sans">
+                      <p className="font-extrabold text-[11px] text-emerald-950">INSTITUCIÓN EDUCATIVA ALVERNIA</p>
+                      <p className="text-[8px] text-slate-500">NIVEL PREESCOLAR – BÁSICA PRIMARIA Y MEDIA ACADÉMICA</p>
+                      <p className="text-[7.5px] text-slate-400">CALENDARIO A – CÓDIGO DANE 186568000567 NIT. 891201897-5</p>
+                    </div>
+                    <div className="w-full h-[1px] bg-slate-900 my-2" />
+                    
+                    <div className="text-center font-sans my-3">
+                      <p className="font-black text-xs text-slate-900 tracking-wider">CONSTANCIA DE MATRÍCULA</p>
+                      <p className="text-[7px] text-slate-400 mt-1 uppercase leading-tight">
+                        INSTITUCIÓN APROBADA POR RESOLUCIONES Nº 2149 / 4713 / 0033 / 0056 / 0275 / 0373. DECRETO 0588.
+                      </p>
+                    </div>
+
+                    <div className="text-center font-sans my-3 space-y-1">
+                      <p className="font-bold text-[9px] uppercase text-slate-800">
+                        {(localStorage.getItem('iea_rector_cargo') || 'RECTOR').toUpperCase() === 'RECTORA' ? 'LA SUSCRITA RECTORA' : 'EL SUSCRITO RECTOR'} DE LA INSTITUCIÓN EDUCATIVA ALVERNIA
+                      </p>
+                      <p className="font-black text-[11px] tracking-widest text-emerald-900">HACE CONSTAR</p>
+                    </div>
+                  </div>
+
+                  {/* Main Paragraph */}
+                  <div className="text-justify leading-relaxed text-slate-800 text-[9.5px]">
+                    {customTexto.split(/\r?\n/).filter(p => p.trim() !== '').map((para, pIdx) => {
+                      const parts = [];
+                      let cur = para;
+                      let k = 0;
+                      while (cur.includes('**')) {
+                        const sIdx = cur.indexOf('**');
+                        const eIdx = cur.indexOf('**', sIdx + 2);
+                        if (eIdx === -1) break;
+                        if (sIdx > 0) parts.push(<span key={k++}>{cur.substring(0, sIdx)}</span>);
+                        parts.push(<strong key={k++} className="font-bold text-slate-950">{cur.substring(sIdx + 2, eIdx)}</strong>);
+                        cur = cur.substring(eIdx + 2);
+                      }
+                      if (cur.length > 0) parts.push(<span key={k++}>{cur}</span>);
+                      return <p key={pIdx} className="mb-2">{parts}</p>;
+                    })}
+                  </div>
+
+                  {/* Note block if present */}
+                  {customNota.trim() && (
+                    <div className="p-2.5 bg-amber-50/70 border-l-2 border-amber-500 text-[9px] text-slate-800 leading-relaxed rounded-r-lg">
+                      <strong className="font-bold text-amber-900">NOTA: </strong>
+                      <span>{customNota.trim().replace(/^nota:?\s*/i, '')}</span>
+                    </div>
+                  )}
+
+                  {/* Signature and issuance text */}
+                  <div className="pt-2 font-sans space-y-5">
+                    <p className="text-[9px] text-slate-700">
+                      {customFirma || generarTextoFirmaDefault()}
+                    </p>
+
+                    <div className="text-center pt-4">
+                      <div className="w-40 border-b border-slate-400 mx-auto mb-1" />
+                      <p className="font-bold text-[9px] text-slate-900">
+                        {localStorage.getItem('iea_rector_name') || "ESP. CARLOS ARCESIO ACOSTA CORONEL"}
+                      </p>
+                      <p className="text-[7.5px] text-slate-500">
+                        {localStorage.getItem('iea_rector_doc') || "C.C. No. 87.246.722 de La Cruz"}
+                      </p>
+                      <p className="font-bold text-[8px] text-slate-700 uppercase">
+                        {localStorage.getItem('iea_rector_cargo') || "RECTOR"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Sheet Footer */}
+                  <div className="pt-2 border-t border-slate-100 text-center font-sans">
+                    <p className="italic text-[7px] text-emerald-800 font-medium">
+                      "Brindamos una educación humanística y académica para la excelencia de un ser humano integral"
+                    </p>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-100 p-4 px-6 border-t border-slate-200 flex justify-between items-center shrink-0">
+              <span className="text-[11px] text-slate-500">
+                Se generará un documento PDF oficial listo para imprimir o enviar.
+              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPrintModal(false)}
+                  disabled={isGeneratingPdf}
+                  className="py-2 px-4 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmGenerateFromModal}
+                  disabled={isGeneratingPdf}
+                  className="py-2 px-5 bg-teal-900 hover:bg-teal-800 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isGeneratingPdf ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                      Generando PDF...
+                    </>
+                  ) : (
+                    <>
+                      <FileDown className="w-4 h-4" />
+                      Descargar / Generar PDF
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
 
           </div>
         </div>
