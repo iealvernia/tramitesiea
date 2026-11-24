@@ -39,13 +39,15 @@ import {
   Archive,
   RefreshCcw,
   UploadCloud,
-  Send
+  Send,
+  Calculator
 } from 'lucide-react';
 import { uploadFileToR2 } from '../lib/r2';
 import { DocenteEvaluacion } from '../types';
 import { supabase } from '../lib/supabase';
 import { generarActaGeneralWord } from '../utils/actaGeneralGenerator';
 import { generarAnexo6Word } from '../utils/exportAnexo6';
+import { calcularDiasValorados } from '../utils/colombiaHolidays';
 
 // Define structures for Decree 1278 Evaluation
 interface FeedbackEntry {
@@ -156,6 +158,12 @@ export interface Evaluacion1278 {
   evalDiasValorados?: number;
   evalCompetenciasMejorar?: string;
   evalEstrategiasMejorar?: string;
+  evalReceso1Inicio?: string;
+  evalReceso1Fin?: string;
+  evalReceso2Inicio?: string;
+  evalReceso2Fin?: string;
+  evalReceso3Inicio?: string;
+  evalReceso3Fin?: string;
 }
 
 interface EvaluacionDocentePanelProps {
@@ -2324,6 +2332,27 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       console.warn('Fallo guardado en PostgreSQL:', err);
       showToast('⚠️ Error de conexión con la base de datos.');
     }
+  };
+
+  // Helper for computing days according to start/end dates, 3 recesses and Colombian holidays
+  const getRecesosArray = (targetEval: Partial<Evaluacion1278>) => [
+    { start: targetEval.evalReceso1Inicio, end: targetEval.evalReceso1Fin, nombre: 'Semana Santa' },
+    { start: targetEval.evalReceso2Inicio, end: targetEval.evalReceso2Fin, nombre: 'Mitad de Año' },
+    { start: targetEval.evalReceso3Inicio, end: targetEval.evalReceso3Fin, nombre: 'Receso Octubre' }
+  ];
+
+  const getDaysBreakdown = (targetEval: Partial<Evaluacion1278>) => {
+    return calcularDiasValorados(
+      targetEval.evalFechaInicio,
+      targetEval.evalFechaFinal,
+      getRecesosArray(targetEval),
+      targetEval.evalDiasIncapacidad || 0,
+      true
+    );
+  };
+
+  const calculateDaysForEval = (targetEval: Partial<Evaluacion1278>): number => {
+    return getDaysBreakdown(targetEval).diasFinales;
   };
 
   // --- ADMIN EXCEL LOADER FOR TEACHERS ---
@@ -6190,11 +6219,11 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     {selectedPeriod === 4 && activeEvaluacion && (
               <div className="space-y-6 animate-fade-in" id="portal-anexo6-view">
                 <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 shadow-sm font-sans flex flex-col text-left">
-                  <div className="flex items-center justify-between mb-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                     <div>
                       <h4 className="font-extrabold text-slate-800 text-lg uppercase tracking-wide mb-1">Evaluación Final (Anexo 6)</h4>
                       <p className="text-sm text-slate-500 max-w-xl">
-                        Ingrese su autoevaluación (calificación apreciativa) para cada competencia. Al finalizar, envíe el formulario para revisión del Rector.
+                        Ingrese su autoevaluación (calificación apreciativa) para cada competencia. Al finalizar, guarde su borrador o envíe el formulario para revisión del Rector.
                       </p>
                     </div>
                     <button
@@ -6202,11 +6231,63 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                         const emp = docentesEvaluacion.find(e => e.cedula === currentTeacher?.cedula);
                         if (emp) handleExportWordAnexo6(activeEvaluacion, emp);
                       }}
-                      className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl uppercase tracking-widest text-xs shadow-md shadow-blue-500/20 transition-colors flex items-center gap-2"
+                      className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl uppercase tracking-widest text-xs shadow-md shadow-blue-500/20 transition-colors flex items-center gap-2 shrink-0 cursor-pointer"
                     >
-                      Descargar Anexo 6 (Borrador)
+                      <Download className="w-4 h-4" />
+                      Descargar Anexo 6 ({activeEvaluacion.estado === 'Aprobado' ? 'Oficial' : 'Borrador'})
                     </button>
                   </div>
+
+                  {/* Resumen de Calificación en Vivo */}
+                  {(() => {
+                    const funcSumWeighted = activeEvaluacion.compromisosFuncionales.reduce((acc, cf) => {
+                      const peso = cf.porcentaje !== undefined ? cf.porcentaje : (cf.area === 'Académica' ? 12.5 : 5.0);
+                      return acc + ((Number(cf.puntaje) || 0) * (peso / 100));
+                    }, 0);
+                    
+                    const funcAvg = activeEvaluacion.compromisosFuncionales.length > 0
+                      ? activeEvaluacion.compromisosFuncionales.reduce((acc, cf) => acc + (Number(cf.puntaje) || 0), 0) / activeEvaluacion.compromisosFuncionales.length
+                      : 0;
+
+                    const compSum = activeEvaluacion.compromisosComportamentales.reduce((acc, cc) => acc + (Number(cc.puntaje) || 0), 0);
+                    const compAvg = activeEvaluacion.compromisosComportamentales.length > 0 ? compSum / activeEvaluacion.compromisosComportamentales.length : 0;
+                    const compWeighted = compAvg * 0.30;
+
+                    const totalScore = Math.round((funcSumWeighted + compWeighted) * 10) / 10;
+                    const nivel = totalScore >= 90 ? 'Sobresaliente' : totalScore >= 60 ? 'Satisfactorio' : 'No Satisfactorio';
+                    const nivelColor = totalScore >= 90 ? 'text-emerald-700 bg-emerald-50 border-emerald-300' : totalScore >= 60 ? 'text-blue-700 bg-blue-50 border-blue-300' : 'text-rose-700 bg-rose-50 border-rose-300';
+
+                    return (
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-4 font-sans">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full md:w-auto flex-1">
+                          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                            <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Prom. Funcionales (70%)</span>
+                            <div className="flex items-baseline gap-1 mt-0.5">
+                              <span className="text-lg font-black text-slate-800">{funcAvg.toFixed(1)}</span>
+                              <span className="text-[10px] font-bold text-slate-500">Pond: <strong className="text-blue-600">{funcSumWeighted.toFixed(1)}</strong></span>
+                            </div>
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                            <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Prom. Comportamentales (30%)</span>
+                            <div className="flex items-baseline gap-1 mt-0.5">
+                              <span className="text-lg font-black text-slate-800">{compAvg.toFixed(1)}</span>
+                              <span className="text-[10px] font-bold text-slate-500">Pond: <strong className="text-indigo-600">{compWeighted.toFixed(1)}</strong></span>
+                            </div>
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border border-slate-200 col-span-2 sm:col-span-1 shadow-sm">
+                            <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Puntaje Final (100%)</span>
+                            <div className="flex items-baseline gap-1.5 mt-0.5">
+                              <span className="text-xl font-black text-slate-900">{totalScore.toFixed(1)}</span>
+                              <span className="text-xs font-semibold text-slate-400">/ 100</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className={`px-4 py-2.5 rounded-xl border font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shrink-0 shadow-sm ${nivelColor}`}>
+                          <span>Valoración: {nivel}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   
                   <div className="space-y-6">
                     {/* Funcionales */}
@@ -6224,28 +6305,30 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                             {activeEvaluacion.compromisosFuncionales.map((cf, i) => (
                               <tr key={'f_'+i} className="hover:bg-slate-50 transition-colors">
                                 <td className="p-3">
-<div className="flex flex-col gap-1">
-  <div className="flex items-center gap-2">
-    <div className="font-bold text-slate-800">{cf.competencia}</div>
-    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 font-extrabold text-[10px] rounded border border-blue-100 whitespace-nowrap">
-      Peso: {cf.porcentaje !== undefined ? cf.porcentaje : (cf.area === 'Académica' ? 12.5 : 5.0)}%
-    </span>
-  </div>
-  <div className="text-[10px] text-slate-500 font-semibold mb-1">{cf.area}</div>
-  <div className="text-[11px] text-slate-600 italic leading-tight" title={cf.contribucion}>{cf.contribucion}</div>
-</div>
-</td>
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="font-bold text-slate-800">{cf.competencia}</div>
+                                      <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 font-extrabold text-[10px] rounded border border-blue-100 whitespace-nowrap">
+                                        Peso: {cf.porcentaje !== undefined ? cf.porcentaje : (cf.area === 'Académica' ? 12.5 : 5.0)}%
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 font-semibold mb-1">{cf.area}</div>
+                                    <div className="text-[11px] text-slate-600 italic leading-tight" title={cf.contribucion}>{cf.contribucion}</div>
+                                  </div>
+                                </td>
                                 <td className="p-3">
                                   <input
                                     type="number"
                                     min="1" max="100"
                                     disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'}
-                                    value={cf.puntaje || 0}
+                                    value={cf.puntaje || ''}
+                                    placeholder="0"
                                     onChange={(e) => {
                                       const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
                                       const updatedFuncs = [...activeEvaluacion.compromisosFuncionales];
                                       updatedFuncs[i] = { ...cf, puntaje: val };
                                       const updatedEval = { ...activeEvaluacion, compromisosFuncionales: updatedFuncs };
+                                      setActiveEvaluacion(updatedEval);
                                       setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
                                     }}
                                     className="w-full p-2 border border-slate-200 rounded-lg text-center font-bold focus:ring-1 focus:ring-blue-500 outline-none disabled:bg-slate-100 disabled:text-slate-500"
@@ -6286,12 +6369,14 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                                     type="number"
                                     min="1" max="100"
                                     disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'}
-                                    value={cc.puntaje || 0}
+                                    value={cc.puntaje || ''}
+                                    placeholder="0"
                                     onChange={(e) => {
                                       const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
                                       const updatedComps = [...activeEvaluacion.compromisosComportamentales];
                                       updatedComps[i] = { ...cc, puntaje: val };
                                       const updatedEval = { ...activeEvaluacion, compromisosComportamentales: updatedComps };
+                                      setActiveEvaluacion(updatedEval);
                                       setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
                                     }}
                                     className="w-full p-2 border border-slate-200 rounded-lg text-center font-bold focus:ring-1 focus:ring-blue-500 outline-none disabled:bg-slate-100 disabled:text-slate-500"
@@ -6312,6 +6397,10 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                              <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Fecha Inicial del Período Evaluado</label>
                              <input type="date" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalFechaInicio || ''} onChange={e => {
                                   const updatedEval = { ...activeEvaluacion, evalFechaInicio: e.target.value };
+                                  if (updatedEval.evalFechaInicio && updatedEval.evalFechaFinal) {
+                                    updatedEval.evalDiasValorados = calculateDaysForEval(updatedEval);
+                                  }
+                                  setActiveEvaluacion(updatedEval);
                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
                              }} className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500" />
                           </div>
@@ -6319,36 +6408,187 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                              <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Fecha Final del Período Evaluado</label>
                              <input type="date" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalFechaFinal || ''} onChange={e => {
                                   const updatedEval = { ...activeEvaluacion, evalFechaFinal: e.target.value };
-                                  setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
-                             }} className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500" />
-                          </div>
-                          <div>
-                             <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">N° días licencias, comisiones, incapacidades</label>
-                             <input type="number" min="0" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalDiasIncapacidad || 0} onChange={e => {
-                                  const updatedEval = { ...activeEvaluacion, evalDiasIncapacidad: parseInt(e.target.value)||0 };
-                                  setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
-                             }} className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500" />
-                          </div>
-                          <div>
-                             <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Total Días Valorados</label>
-                             <input type="number" min="0" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalDiasValorados || 0} onChange={e => {
-                                  const updatedEval = { ...activeEvaluacion, evalDiasValorados: parseInt(e.target.value)||0 };
+                                  if (updatedEval.evalFechaInicio && updatedEval.evalFechaFinal) {
+                                    updatedEval.evalDiasValorados = calculateDaysForEval(updatedEval);
+                                  }
+                                  setActiveEvaluacion(updatedEval);
                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
                              }} className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500" />
                           </div>
                        </div>
+
+                       {/* Períodos de Receso Estudiantil (3 recesos en Colombia) */}
+                       <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl space-y-3">
+                         <div className="flex items-center justify-between flex-wrap gap-2">
+                           <div className="flex items-center gap-2">
+                             <Calendar className="w-4 h-4 text-blue-700" />
+                             <span className="text-xs font-black text-blue-900 uppercase tracking-wider">Fechas de Receso Estudiantil (Colombia - Decreto 1373)</span>
+                           </div>
+                           <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">3 Recesos Oficiales</span>
+                         </div>
+                         <p className="text-[11px] text-blue-800/80 leading-snug">
+                           Ingrese las fechas de los tres recesos estudiantiles para descontarlos automáticamente del cálculo exacto de días valorados junto a los días festivos oficiales de Colombia. <em>(Estas fechas son exclusivas para este cómputo y no se imprimen en el formato Anexo 6)</em>.
+                         </p>
+
+                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                           {/* Receso 1 */}
+                           <div className="bg-white p-2.5 rounded-lg border border-blue-100 shadow-xs">
+                             <div className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                               <span>1. Semana Santa</span>
+                               <span className="text-[9px] text-slate-400 font-normal">Primer Receso</span>
+                             </div>
+                             <div className="grid grid-cols-2 gap-1.5">
+                               <div>
+                                 <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Inicio</label>
+                                 <input type="date" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalReceso1Inicio || ''} onChange={e => {
+                                   const updatedEval = { ...activeEvaluacion, evalReceso1Inicio: e.target.value };
+                                   if (updatedEval.evalFechaInicio && updatedEval.evalFechaFinal) updatedEval.evalDiasValorados = calculateDaysForEval(updatedEval);
+                                   setActiveEvaluacion(updatedEval);
+                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
+                                 }} className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60" />
+                               </div>
+                               <div>
+                                 <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Fin</label>
+                                 <input type="date" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalReceso1Fin || ''} onChange={e => {
+                                   const updatedEval = { ...activeEvaluacion, evalReceso1Fin: e.target.value };
+                                   if (updatedEval.evalFechaInicio && updatedEval.evalFechaFinal) updatedEval.evalDiasValorados = calculateDaysForEval(updatedEval);
+                                   setActiveEvaluacion(updatedEval);
+                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
+                                 }} className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60" />
+                               </div>
+                             </div>
+                           </div>
+
+                           {/* Receso 2 */}
+                           <div className="bg-white p-2.5 rounded-lg border border-blue-100 shadow-xs">
+                             <div className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                               <span>2. Mitad de Año</span>
+                               <span className="text-[9px] text-slate-400 font-normal">Segundo Receso</span>
+                             </div>
+                             <div className="grid grid-cols-2 gap-1.5">
+                               <div>
+                                 <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Inicio</label>
+                                 <input type="date" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalReceso2Inicio || ''} onChange={e => {
+                                   const updatedEval = { ...activeEvaluacion, evalReceso2Inicio: e.target.value };
+                                   if (updatedEval.evalFechaInicio && updatedEval.evalFechaFinal) updatedEval.evalDiasValorados = calculateDaysForEval(updatedEval);
+                                   setActiveEvaluacion(updatedEval);
+                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
+                                 }} className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60" />
+                               </div>
+                               <div>
+                                 <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Fin</label>
+                                 <input type="date" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalReceso2Fin || ''} onChange={e => {
+                                   const updatedEval = { ...activeEvaluacion, evalReceso2Fin: e.target.value };
+                                   if (updatedEval.evalFechaInicio && updatedEval.evalFechaFinal) updatedEval.evalDiasValorados = calculateDaysForEval(updatedEval);
+                                   setActiveEvaluacion(updatedEval);
+                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
+                                 }} className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60" />
+                               </div>
+                             </div>
+                           </div>
+
+                           {/* Receso 3 */}
+                           <div className="bg-white p-2.5 rounded-lg border border-blue-100 shadow-xs">
+                             <div className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                               <span>3. Receso Octubre</span>
+                               <span className="text-[9px] text-slate-400 font-normal">Tercer Receso</span>
+                             </div>
+                             <div className="grid grid-cols-2 gap-1.5">
+                               <div>
+                                 <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Inicio</label>
+                                 <input type="date" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalReceso3Inicio || ''} onChange={e => {
+                                   const updatedEval = { ...activeEvaluacion, evalReceso3Inicio: e.target.value };
+                                   if (updatedEval.evalFechaInicio && updatedEval.evalFechaFinal) updatedEval.evalDiasValorados = calculateDaysForEval(updatedEval);
+                                   setActiveEvaluacion(updatedEval);
+                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
+                                 }} className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60" />
+                               </div>
+                               <div>
+                                 <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Fin</label>
+                                 <input type="date" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalReceso3Fin || ''} onChange={e => {
+                                   const updatedEval = { ...activeEvaluacion, evalReceso3Fin: e.target.value };
+                                   if (updatedEval.evalFechaInicio && updatedEval.evalFechaFinal) updatedEval.evalDiasValorados = calculateDaysForEval(updatedEval);
+                                   setActiveEvaluacion(updatedEval);
+                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
+                                 }} className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60" />
+                               </div>
+                             </div>
+                           </div>
+                         </div>
+                       </div>
+
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                             <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">N° días licencias, comisiones, incapacidades</label>
+                             <input type="number" min="0" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalDiasIncapacidad || 0} onChange={e => {
+                                  const val = parseInt(e.target.value)||0;
+                                  const updatedEval = { ...activeEvaluacion, evalDiasIncapacidad: val };
+                                  if (updatedEval.evalFechaInicio && updatedEval.evalFechaFinal) {
+                                    updatedEval.evalDiasValorados = calculateDaysForEval(updatedEval);
+                                  }
+                                  setActiveEvaluacion(updatedEval);
+                                  setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
+                             }} className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500" />
+                          </div>
+                          <div>
+                             <div className="flex items-center justify-between mb-1">
+                               <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Total Días Valorados</label>
+                               <button
+                                 type="button"
+                                 disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'}
+                                 onClick={() => {
+                                   const dias = calculateDaysForEval(activeEvaluacion);
+                                   const updatedEval = { ...activeEvaluacion, evalDiasValorados: dias };
+                                   setActiveEvaluacion(updatedEval);
+                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
+                                   showToast(`✓ Días valorados calculados: ${dias} días hábiles.`);
+                                 }}
+                                 className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                               >
+                                 <Calculator className="w-3 h-3" />
+                                 Recalcular
+                               </button>
+                             </div>
+                             <input type="number" min="0" disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalDiasValorados || 0} onChange={e => {
+                                  const updatedEval = { ...activeEvaluacion, evalDiasValorados: parseInt(e.target.value)||0 };
+                                  setActiveEvaluacion(updatedEval);
+                                  setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
+                             }} className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-black text-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500" />
+                          </div>
+                       </div>
+
+                       {/* Calculation Breakdown Details Card */}
+                       {activeEvaluacion.evalFechaInicio && activeEvaluacion.evalFechaFinal && (() => {
+                         const bd = getDaysBreakdown(activeEvaluacion);
+                         return (
+                           <div className="p-2.5 bg-slate-100/90 rounded-lg text-[11px] text-slate-600 border border-slate-200 flex flex-wrap items-center gap-x-4 gap-y-1">
+                             <span className="font-bold text-slate-700 flex items-center gap-1">
+                               <Info className="w-3.5 h-3.5 text-blue-600" />
+                               Desglose del cálculo:
+                             </span>
+                             <span>Calendario: <b>{bd.totalDiasCalendario}</b> días</span>
+                             <span>Fines de semana: <b>-{bd.finesDeSemana}</b></span>
+                             <span>Festivos Colombia: <b>-{bd.diasFestivos}</b></span>
+                             <span>Recesos estudiantiles: <b>-{bd.diasReceso}</b></span>
+                             {bd.diasIncapacidad > 0 && <span>Incapacidades: <b>-{bd.diasIncapacidad}</b></span>}
+                             <span className="text-blue-800 font-extrabold ml-auto">Total Valorados: <b>{bd.diasFinales}</b> días</span>
+                           </div>
+                         );
+                       })()}
                        <div className="space-y-3 mt-4">
                           <div>
                              <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Competencias Objeto de Mejoramiento</label>
                              <textarea rows={2} disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalCompetenciasMejorar || ''} onChange={e => {
                                   const updatedEval = { ...activeEvaluacion, evalCompetenciasMejorar: e.target.value };
+                                  setActiveEvaluacion(updatedEval);
                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
                              }} className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500" placeholder="Especifique las competencias..." />
                           </div>
                           <div>
-                             <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Estrategias y acciones específicas...</label>
+                             <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Estrategias y acciones específicas de mejoramiento</label>
                              <textarea rows={2} disabled={activeEvaluacion.estado === 'Enviado' || activeEvaluacion.estado === 'Aprobado'} value={activeEvaluacion.evalEstrategiasMejorar || ''} onChange={e => {
                                   const updatedEval = { ...activeEvaluacion, evalEstrategiasMejorar: e.target.value };
+                                  setActiveEvaluacion(updatedEval);
                                   setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
                              }} className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500" placeholder="Especifique las acciones de mejora..." />
                           </div>
@@ -6356,23 +6596,74 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     </div>
                     
                     {activeEvaluacion.estado !== 'Aprobado' && activeEvaluacion.estado !== 'Enviado' && (
-                        <div className="flex justify-end mt-6">
+                        <div className="flex flex-wrap items-center justify-end gap-3 mt-6">
                             <button
+                                type="button"
                                 onClick={() => {
-                                    const updatedEval = { ...activeEvaluacion, estado: 'Enviado' };
-                                    setEvaluaciones(prev => prev.map(ev => ev.id === updatedEval.id ? updatedEval : ev));
+                                    const itemToSave: Evaluacion1278 = {
+                                        ...activeEvaluacion,
+                                        estado: 'Borrador',
+                                        updatedAt: new Date().toISOString()
+                                    };
+                                    setActiveEvaluacion(itemToSave);
+                                    setEvaluaciones(prev => prev.map(ev => ev.id === itemToSave.id ? itemToSave : ev));
+                                    syncEvaluacionesToPostgres(itemToSave);
+                                    showToast('✓ Borrador de Anexo 6 guardado exitosamente en la base de datos.');
+                                }}
+                                className="py-2.5 px-5 border border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer flex items-center gap-1.5 shadow-sm transition-colors"
+                            >
+                                <Save className="w-4 h-4" />
+                                Guardar Borrador
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    const funcsWithoutScore = activeEvaluacion.compromisosFuncionales.filter(cf => !cf.puntaje || cf.puntaje <= 0);
+                                    const compsWithoutScore = activeEvaluacion.compromisosComportamentales.filter(cc => !cc.puntaje || cc.puntaje <= 0);
+                                    
+                                    if (funcsWithoutScore.length > 0 || compsWithoutScore.length > 0) {
+                                      if (!window.confirm('⚠️ Hay competencias con puntaje 0 o sin calificar. ¿Desea enviar de todas formas su autoevaluación al Rector?')) {
+                                        return;
+                                      }
+                                    }
+
+                                    const itemToSave: Evaluacion1278 = {
+                                        ...activeEvaluacion,
+                                        estado: 'Enviado',
+                                        updatedAt: new Date().toISOString()
+                                    };
+                                    setActiveEvaluacion(itemToSave);
+                                    setEvaluaciones(prev => prev.map(ev => ev.id === itemToSave.id ? itemToSave : ev));
+                                    await syncEvaluacionesToPostgres(itemToSave);
+                                    showToast('✓ Autoevaluación (Anexo 6) enviada con éxito a Rectoría y guardada en el servidor.');
                                     alert('Autoevaluación (Anexo 6) enviada con éxito a Rectoría.');
                                 }}
-                                className="py-2.5 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer flex items-center gap-1.5 shadow-md shadow-blue-500/10"
+                                className="py-2.5 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer flex items-center gap-1.5 shadow-md shadow-blue-500/10 transition-colors"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2z"/></svg>
+                                <Send className="w-4 h-4" />
                                 Enviar a Revisión
                             </button>
                         </div>
                     )}
                     {(activeEvaluacion.estado === 'Aprobado' || activeEvaluacion.estado === 'Enviado') && (
-                        <div className="mt-4 bg-emerald-50 text-emerald-700 text-xs font-bold p-3 rounded-xl border border-emerald-200">
-                          Su autoevaluación ha sido enviada y se encuentra en estado: {activeEvaluacion.estado.toUpperCase()}. No puede ser modificada.
+                        <div className="mt-4 bg-emerald-50 text-emerald-700 text-xs font-bold p-3 rounded-xl border border-emerald-200 flex items-center justify-between">
+                          <span>Su autoevaluación ha sido enviada y se encuentra en estado: <strong>{activeEvaluacion.estado.toUpperCase()}</strong>.</span>
+                          {activeEvaluacion.estado === 'Enviado' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const reopened: Evaluacion1278 = { ...activeEvaluacion, estado: 'Borrador' };
+                                setActiveEvaluacion(reopened);
+                                setEvaluaciones(prev => prev.map(ev => ev.id === reopened.id ? reopened : ev));
+                                syncEvaluacionesToPostgres(reopened);
+                                showToast('Autoevaluación devuelta a borrador para edición.');
+                              }}
+                              className="text-[11px] underline text-blue-700 hover:text-blue-900 font-extrabold cursor-pointer ml-3"
+                            >
+                              Continuar editando
+                            </button>
+                          )}
                         </div>
                     )}
                   </div>
@@ -6712,6 +7003,18 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     <Download className="w-3.5 h-3.5" />
                     Anexo 2 (Evidencias)
                   </button>
+                  {Number(selectedEvalForInspection.periodo) === 4 && (
+                    <button
+                      onClick={() => {
+                        const emp = docentesEvaluacion.find(e => e.cedula === selectedEvalForInspection.cedula);
+                        if (emp) handleExportWordAnexo6(selectedEvalForInspection, emp);
+                      }}
+                      className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Descargar Anexo 6 (Evaluación Final)
+                    </button>
+                  )}
                   {selectedEvalForInspection.estado === 'Aprobado' && (
                     <button
                       onClick={() => {
@@ -6801,9 +7104,459 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                 </div>
               </div>
 
-              {/* Collapsible/Scrolling areas of Anexo 5 */}
-              <div className="space-y-4">
-                <h4 className="font-extrabold text-slate-700 text-sm border-b border-slate-100 pb-1">Compromisos Declarados (Anexo 5)</h4>
+              {/* S4 (Anexo 6): Panel de Revisión de Evaluación Final para Rector */}
+              {Number(selectedEvalForInspection.periodo) === 4 ? (
+                <div className="space-y-6">
+                  {/* Resumen de Calificación Final */}
+                  {(() => {
+                    const funcSumWeighted = selectedEvalForInspection.compromisosFuncionales.reduce((acc, cf) => {
+                      const peso = cf.porcentaje !== undefined ? cf.porcentaje : (cf.area === 'Académica' ? 12.5 : 5.0);
+                      return acc + ((Number(cf.puntaje) || 0) * (peso / 100));
+                    }, 0);
+                    
+                    const funcAvg = selectedEvalForInspection.compromisosFuncionales.length > 0
+                      ? selectedEvalForInspection.compromisosFuncionales.reduce((acc, cf) => acc + (Number(cf.puntaje) || 0), 0) / selectedEvalForInspection.compromisosFuncionales.length
+                      : 0;
+
+                    const compSum = selectedEvalForInspection.compromisosComportamentales.reduce((acc, cc) => acc + (Number(cc.puntaje) || 0), 0);
+                    const compAvg = selectedEvalForInspection.compromisosComportamentales.length > 0 ? compSum / selectedEvalForInspection.compromisosComportamentales.length : 0;
+                    const compWeighted = compAvg * 0.30;
+
+                    const totalScore = Math.round((funcSumWeighted + compWeighted) * 10) / 10;
+                    const nivel = totalScore >= 90 ? 'Sobresaliente' : totalScore >= 60 ? 'Satisfactorio' : 'No Satisfactorio';
+                    const nivelColor = totalScore >= 90 ? 'text-emerald-700 bg-emerald-50 border-emerald-300' : totalScore >= 60 ? 'text-blue-700 bg-blue-50 border-blue-300' : 'text-rose-700 bg-rose-50 border-rose-300';
+
+                    return (
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 font-sans">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full md:w-auto flex-1">
+                          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                            <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Prom. Funcionales (70%)</span>
+                            <div className="flex items-baseline gap-1 mt-0.5">
+                              <span className="text-lg font-black text-slate-800">{funcAvg.toFixed(1)}</span>
+                              <span className="text-[10px] font-bold text-slate-500">Pond: <strong className="text-blue-600">{funcSumWeighted.toFixed(1)}</strong></span>
+                            </div>
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                            <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Prom. Comportamentales (30%)</span>
+                            <div className="flex items-baseline gap-1 mt-0.5">
+                              <span className="text-lg font-black text-slate-800">{compAvg.toFixed(1)}</span>
+                              <span className="text-[10px] font-bold text-slate-500">Pond: <strong className="text-indigo-600">{compWeighted.toFixed(1)}</strong></span>
+                            </div>
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border border-slate-200 col-span-2 sm:col-span-1 shadow-sm">
+                            <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Puntaje Total Final (100%)</span>
+                            <div className="flex items-baseline gap-1.5 mt-0.5">
+                              <span className="text-xl font-black text-slate-900">{totalScore.toFixed(1)}</span>
+                              <span className="text-xs font-semibold text-slate-400">/ 100</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className={`px-4 py-2.5 rounded-xl border font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shrink-0 shadow-sm ${nivelColor}`}>
+                          <span>Nivel Final: {nivel}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Competencias Funcionales (70%) */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                      <h4 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide">Competencias Funcionales (70%)</h4>
+                      <span className="text-[11px] text-slate-500 font-medium">Calificaciones asignadas por el docente / evaluador</span>
+                    </div>
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-700 uppercase tracking-wider">
+                            <th className="p-3 font-bold border-b border-slate-200">Área & Competencia</th>
+                            <th className="p-3 font-bold border-b border-slate-200">Contribución Individual</th>
+                            <th className="p-3 font-bold border-b border-slate-200 w-24 text-center">Peso %</th>
+                            <th className="p-3 font-bold border-b border-slate-200 w-28 text-center">Puntaje</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {selectedEvalForInspection.compromisosFuncionales.map((cf, idx) => (
+                            <tr key={'admin_f_' + idx} className="hover:bg-slate-50 transition-colors">
+                              <td className="p-3">
+                                <div className="font-bold text-slate-800">{cf.competencia}</div>
+                                <div className="text-[10px] text-slate-500 font-semibold">{cf.area}</div>
+                              </td>
+                              <td className="p-3 text-[11px] text-slate-600 italic">
+                                {cf.contribucion || '-'}
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 font-extrabold text-[10px] rounded border border-blue-100">
+                                  {cf.porcentaje !== undefined ? cf.porcentaje : (cf.area === 'Académica' ? 12.5 : 5.0)}%
+                                </span>
+                              </td>
+                              <td className="p-3 text-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="100"
+                                  value={cf.puntaje || ''}
+                                  placeholder="0"
+                                  onChange={(e) => {
+                                    const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                    const updatedFuncs = [...selectedEvalForInspection.compromisosFuncionales];
+                                    updatedFuncs[idx] = { ...cf, puntaje: val };
+                                    const updated = { ...selectedEvalForInspection, compromisosFuncionales: updatedFuncs };
+                                    setSelectedEvalForInspection(updated);
+                                    setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                                  }}
+                                  className="w-20 p-1.5 border border-slate-300 rounded-lg text-center font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Competencias Comportamentales (30%) */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                      <h4 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide">Competencias Comportamentales (30%)</h4>
+                      <span className="text-[11px] text-slate-500 font-medium">3 competencias valoradas (10% cada una)</span>
+                    </div>
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-700 uppercase tracking-wider">
+                            <th className="p-3 font-bold border-b border-slate-200">Competencia</th>
+                            <th className="p-3 font-bold border-b border-slate-200">Criterios / Evidencias Conductuales</th>
+                            <th className="p-3 font-bold border-b border-slate-200 w-24 text-center">Peso %</th>
+                            <th className="p-3 font-bold border-b border-slate-200 w-28 text-center">Puntaje</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {selectedEvalForInspection.compromisosComportamentales.map((cc, idx) => (
+                            <tr key={'admin_c_' + idx} className="hover:bg-slate-50 transition-colors">
+                              <td className="p-3 font-bold text-slate-800">
+                                {cc.competencia}
+                              </td>
+                              <td className="p-3 text-[11px] text-slate-600 italic">
+                                {cc.evidencias || '-'}
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 font-extrabold text-[10px] rounded border border-blue-100">
+                                  10.0%
+                                </span>
+                              </td>
+                              <td className="p-3 text-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="100"
+                                  value={cc.puntaje || ''}
+                                  placeholder="0"
+                                  onChange={(e) => {
+                                    const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                    const updatedComps = [...selectedEvalForInspection.compromisosComportamentales];
+                                    updatedComps[idx] = { ...cc, puntaje: val };
+                                    const updated = { ...selectedEvalForInspection, compromisosComportamentales: updatedComps };
+                                    setSelectedEvalForInspection(updated);
+                                    setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                                  }}
+                                  className="w-20 p-1.5 border border-slate-300 rounded-lg text-center font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Datos Complementarios y Plan de Desarrollo */}
+                  <div className="space-y-4 bg-slate-50 p-4 border border-slate-200 rounded-xl">
+                    <h5 className="font-bold text-slate-800 border-b border-slate-200 pb-2">Datos Complementarios y Plan de Desarrollo (Anexo 6)</h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Fecha Inicial del Período Evaluado</label>
+                        <input
+                          type="date"
+                          value={selectedEvalForInspection.evalFechaInicio || ''}
+                          onChange={e => {
+                            const updated = { ...selectedEvalForInspection, evalFechaInicio: e.target.value };
+                            if (updated.evalFechaInicio && updated.evalFechaFinal) {
+                              updated.evalDiasValorados = calculateDaysForEval(updated);
+                            }
+                            setSelectedEvalForInspection(updated);
+                            setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                          }}
+                          className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Fecha Final del Período Evaluado</label>
+                        <input
+                          type="date"
+                          value={selectedEvalForInspection.evalFechaFinal || ''}
+                          onChange={e => {
+                            const updated = { ...selectedEvalForInspection, evalFechaFinal: e.target.value };
+                            if (updated.evalFechaInicio && updated.evalFechaFinal) {
+                              updated.evalDiasValorados = calculateDaysForEval(updated);
+                            }
+                            setSelectedEvalForInspection(updated);
+                            setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                          }}
+                          className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Períodos de Receso Estudiantil (3 recesos en Colombia) */}
+                    <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-blue-700" />
+                          <span className="text-xs font-black text-blue-900 uppercase tracking-wider">Fechas de Receso Estudiantil (Colombia - Decreto 1373)</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">3 Recesos Oficiales</span>
+                      </div>
+                      <p className="text-[11px] text-blue-800/80 leading-snug">
+                        Ingrese las fechas de los tres recesos estudiantiles para descontarlos automáticamente del cálculo exacto de días valorados junto a los días festivos oficiales de Colombia. <em>(Estas fechas son exclusivas para este cómputo y no se imprimen en el formato Anexo 6)</em>.
+                      </p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {/* Receso 1 */}
+                        <div className="bg-white p-2.5 rounded-lg border border-blue-100 shadow-xs">
+                          <div className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                            <span>1. Semana Santa</span>
+                            <span className="text-[9px] text-slate-400 font-normal">Primer Receso</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Inicio</label>
+                              <input
+                                type="date"
+                                value={selectedEvalForInspection.evalReceso1Inicio || ''}
+                                onChange={e => {
+                                  const updated = { ...selectedEvalForInspection, evalReceso1Inicio: e.target.value };
+                                  if (updated.evalFechaInicio && updated.evalFechaFinal) updated.evalDiasValorados = calculateDaysForEval(updated);
+                                  setSelectedEvalForInspection(updated);
+                                  setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                                }}
+                                className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Fin</label>
+                              <input
+                                type="date"
+                                value={selectedEvalForInspection.evalReceso1Fin || ''}
+                                onChange={e => {
+                                  const updated = { ...selectedEvalForInspection, evalReceso1Fin: e.target.value };
+                                  if (updated.evalFechaInicio && updated.evalFechaFinal) updated.evalDiasValorados = calculateDaysForEval(updated);
+                                  setSelectedEvalForInspection(updated);
+                                  setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                                }}
+                                className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Receso 2 */}
+                        <div className="bg-white p-2.5 rounded-lg border border-blue-100 shadow-xs">
+                          <div className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                            <span>2. Mitad de Año</span>
+                            <span className="text-[9px] text-slate-400 font-normal">Segundo Receso</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Inicio</label>
+                              <input
+                                type="date"
+                                value={selectedEvalForInspection.evalReceso2Inicio || ''}
+                                onChange={e => {
+                                  const updated = { ...selectedEvalForInspection, evalReceso2Inicio: e.target.value };
+                                  if (updated.evalFechaInicio && updated.evalFechaFinal) updated.evalDiasValorados = calculateDaysForEval(updated);
+                                  setSelectedEvalForInspection(updated);
+                                  setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                                }}
+                                className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Fin</label>
+                              <input
+                                type="date"
+                                value={selectedEvalForInspection.evalReceso2Fin || ''}
+                                onChange={e => {
+                                  const updated = { ...selectedEvalForInspection, evalReceso2Fin: e.target.value };
+                                  if (updated.evalFechaInicio && updated.evalFechaFinal) updated.evalDiasValorados = calculateDaysForEval(updated);
+                                  setSelectedEvalForInspection(updated);
+                                  setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                                }}
+                                className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Receso 3 */}
+                        <div className="bg-white p-2.5 rounded-lg border border-blue-100 shadow-xs">
+                          <div className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                            <span>3. Receso Octubre</span>
+                            <span className="text-[9px] text-slate-400 font-normal">Tercer Receso</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Inicio</label>
+                              <input
+                                type="date"
+                                value={selectedEvalForInspection.evalReceso3Inicio || ''}
+                                onChange={e => {
+                                  const updated = { ...selectedEvalForInspection, evalReceso3Inicio: e.target.value };
+                                  if (updated.evalFechaInicio && updated.evalFechaFinal) updated.evalDiasValorados = calculateDaysForEval(updated);
+                                  setSelectedEvalForInspection(updated);
+                                  setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                                }}
+                                className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] text-slate-500 font-bold uppercase mb-0.5">Fin</label>
+                              <input
+                                type="date"
+                                value={selectedEvalForInspection.evalReceso3Fin || ''}
+                                onChange={e => {
+                                  const updated = { ...selectedEvalForInspection, evalReceso3Fin: e.target.value };
+                                  if (updated.evalFechaInicio && updated.evalFechaFinal) updated.evalDiasValorados = calculateDaysForEval(updated);
+                                  setSelectedEvalForInspection(updated);
+                                  setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                                }}
+                                className="w-full px-1.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">N° días licencias, comisiones, incapacidades</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={selectedEvalForInspection.evalDiasIncapacidad || 0}
+                          onChange={e => {
+                            const val = parseInt(e.target.value) || 0;
+                            const updated = { ...selectedEvalForInspection, evalDiasIncapacidad: val };
+                            if (updated.evalFechaInicio && updated.evalFechaFinal) {
+                              updated.evalDiasValorados = calculateDaysForEval(updated);
+                            }
+                            setSelectedEvalForInspection(updated);
+                            setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                          }}
+                          className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Total Días Valorados</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const dias = calculateDaysForEval(selectedEvalForInspection);
+                              const updated = { ...selectedEvalForInspection, evalDiasValorados: dias };
+                              setSelectedEvalForInspection(updated);
+                              setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                              showToast(`✓ Días valorados calculados: ${dias} días hábiles.`);
+                            }}
+                            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Calculator className="w-3 h-3" />
+                            Recalcular
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          value={selectedEvalForInspection.evalDiasValorados || 0}
+                          onChange={e => {
+                            const updated = { ...selectedEvalForInspection, evalDiasValorados: parseInt(e.target.value) || 0 };
+                            setSelectedEvalForInspection(updated);
+                            setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                          }}
+                          className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-black text-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Calculation Breakdown Details Card */}
+                    {selectedEvalForInspection.evalFechaInicio && selectedEvalForInspection.evalFechaFinal && (() => {
+                      const bd = getDaysBreakdown(selectedEvalForInspection);
+                      return (
+                        <div className="p-2.5 bg-slate-100/90 rounded-lg text-[11px] text-slate-600 border border-slate-200 flex flex-wrap items-center gap-x-4 gap-y-1">
+                          <span className="font-bold text-slate-700 flex items-center gap-1">
+                            <Info className="w-3.5 h-3.5 text-blue-600" />
+                            Desglose del cálculo:
+                          </span>
+                          <span>Calendario: <b>{bd.totalDiasCalendario}</b> días</span>
+                          <span>Fines de semana: <b>-{bd.finesDeSemana}</b></span>
+                          <span>Festivos Colombia: <b>-{bd.diasFestivos}</b></span>
+                          <span>Recesos estudiantiles: <b>-{bd.diasReceso}</b></span>
+                          {bd.diasIncapacidad > 0 && <span>Incapacidades: <b>-{bd.diasIncapacidad}</b></span>}
+                          <span className="text-blue-800 font-extrabold ml-auto">Total Valorados: <b>{bd.diasFinales}</b> días</span>
+                        </div>
+                      );
+                    })()}
+                    <div className="space-y-3 mt-4">
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Competencias Objeto de Mejoramiento</label>
+                        <textarea
+                          rows={2}
+                          value={selectedEvalForInspection.evalCompetenciasMejorar || ''}
+                          onChange={e => {
+                            const updated = { ...selectedEvalForInspection, evalCompetenciasMejorar: e.target.value };
+                            setSelectedEvalForInspection(updated);
+                            setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                          }}
+                          className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          placeholder="Especifique las competencias..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Estrategias y acciones específicas de mejoramiento</label>
+                        <textarea
+                          rows={2}
+                          value={selectedEvalForInspection.evalEstrategiasMejorar || ''}
+                          onChange={e => {
+                            const updated = { ...selectedEvalForInspection, evalEstrategiasMejorar: e.target.value };
+                            setSelectedEvalForInspection(updated);
+                            setEvaluaciones(prev => prev.map(ev => ev.id === updated.id ? updated : ev));
+                          }}
+                          className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          placeholder="Especifique las acciones de mejora..."
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          syncEvaluacionesToPostgres(selectedEvalForInspection);
+                          showToast('✓ Cambios en Evaluación Final (Anexo 6) guardados exitosamente en la base de datos.');
+                        }}
+                        className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        Guardar Cambios Anexo 6
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Collapsible/Scrolling areas of Anexo 5 */}
+                  <div className="space-y-4">
+                    <h4 className="font-extrabold text-slate-700 text-sm border-b border-slate-100 pb-1">Compromisos Declarados (Anexo 5)</h4>
                 
                 {/* Porcentaje summary header card */}
                 {(() => {
@@ -7100,6 +7853,8 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                   </div>
                 )}
               </div>
+              </>
+              )}
 
               {/* Feedback Inputs */}
               {Number(selectedEvalForInspection.periodo) === 1 && (
