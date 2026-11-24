@@ -90,9 +90,21 @@ async function ensureDbTables() {
     await client.query(`
       ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS evidencias_anexo5 JSONB;
       ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS observaciones_admin TEXT;
-        ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS anexo2_aprobado BOOLEAN DEFAULT FALSE;
-        ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS anexo5_aprobado BOOLEAN DEFAULT FALSE;
-        ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS historial_retroalimentacion JSONB;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS anexo2_aprobado BOOLEAN DEFAULT FALSE;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS anexo5_aprobado BOOLEAN DEFAULT FALSE;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS historial_retroalimentacion JSONB;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_fecha_inicio TEXT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_fecha_final TEXT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_dias_incapacidad INT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_dias_valorados INT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_competencias_mejorar TEXT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_estrategias_mejorar TEXT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_receso1_inicio TEXT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_receso1_fin TEXT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_receso2_inicio TEXT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_receso2_fin TEXT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_receso3_inicio TEXT;
+      ALTER TABLE alvernia_evaluaciones_1278 ADD COLUMN IF NOT EXISTS eval_receso3_fin TEXT;
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS alvernia_employees (
@@ -736,6 +748,12 @@ app.get("/api/evaluaciones", async (req, res) => {
       evalDiasValorados: row.eval_dias_valorados,
       evalCompetenciasMejorar: row.eval_competencias_mejorar,
       evalEstrategiasMejorar: row.eval_estrategias_mejorar,
+      evalReceso1Inicio: row.eval_receso1_inicio,
+      evalReceso1Fin: row.eval_receso1_fin,
+      evalReceso2Inicio: row.eval_receso2_inicio,
+      evalReceso2Fin: row.eval_receso2_fin,
+      evalReceso3Inicio: row.eval_receso3_inicio,
+      evalReceso3Fin: row.eval_receso3_fin,
       updatedAt: row.updated_at
     }));
     res.json({ success: true, evaluaciones: mappedEvaluaciones });
@@ -788,7 +806,13 @@ app.post("/api/evaluaciones", async (req, res) => {
     evalDiasIncapacidad,
     evalDiasValorados,
     evalCompetenciasMejorar,
-    evalEstrategiasMejorar
+    evalEstrategiasMejorar,
+    evalReceso1Inicio,
+    evalReceso1Fin,
+    evalReceso2Inicio,
+    evalReceso2Fin,
+    evalReceso3Inicio,
+    evalReceso3Fin
   } = req.body;
   if (!id || !cedula) {
     return res.status(400).json({ success: false, error: "id and cedula are required fields." });
@@ -799,8 +823,8 @@ app.post("/api/evaluaciones", async (req, res) => {
         id, cedula, periodo, lugar_concertacion, fecha_concertacion, 
         evaluador_nombre, evaluador_cedula, observaciones_admin, estado, 
         compromisos_funcionales, compromisos_comportamentales, evidencias_anexo2, 
-        evidencias_anexo5, portfolio_pdf_url, anexo2_aprobado, anexo5_aprobado, historial_retroalimentacion, updated_at, eval_fecha_inicio, eval_fecha_final, eval_dias_incapacidad, eval_dias_valorados, eval_competencias_mejorar, eval_estrategias_mejorar
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+        evidencias_anexo5, portfolio_pdf_url, anexo2_aprobado, anexo5_aprobado, historial_retroalimentacion, updated_at, eval_fecha_inicio, eval_fecha_final, eval_dias_incapacidad, eval_dias_valorados, eval_competencias_mejorar, eval_estrategias_mejorar, eval_receso1_inicio, eval_receso1_fin, eval_receso2_inicio, eval_receso2_fin, eval_receso3_inicio, eval_receso3_fin
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
       ON CONFLICT (id) DO UPDATE SET
         cedula = EXCLUDED.cedula,
         periodo = EXCLUDED.periodo,
@@ -824,7 +848,13 @@ app.post("/api/evaluaciones", async (req, res) => {
         eval_dias_incapacidad = EXCLUDED.eval_dias_incapacidad,
         eval_dias_valorados = EXCLUDED.eval_dias_valorados,
         eval_competencias_mejorar = EXCLUDED.eval_competencias_mejorar,
-        eval_estrategias_mejorar = EXCLUDED.eval_estrategias_mejorar
+        eval_estrategias_mejorar = EXCLUDED.eval_estrategias_mejorar,
+        eval_receso1_inicio = EXCLUDED.eval_receso1_inicio,
+        eval_receso1_fin = EXCLUDED.eval_receso1_fin,
+        eval_receso2_inicio = EXCLUDED.eval_receso2_inicio,
+        eval_receso2_fin = EXCLUDED.eval_receso2_fin,
+        eval_receso3_inicio = EXCLUDED.eval_receso3_inicio,
+        eval_receso3_fin = EXCLUDED.eval_receso3_fin
     `, [
       id,
       cedula,
@@ -849,7 +879,13 @@ app.post("/api/evaluaciones", async (req, res) => {
       evalDiasIncapacidad || null,
       evalDiasValorados || null,
       evalCompetenciasMejorar || null,
-      evalEstrategiasMejorar || null
+      evalEstrategiasMejorar || null,
+      evalReceso1Inicio || null,
+      evalReceso1Fin || null,
+      evalReceso2Inicio || null,
+      evalReceso2Fin || null,
+      evalReceso3Inicio || null,
+      evalReceso3Fin || null
     ]);
     res.json({ success: true, message: `Evaluaci\xC3\xB3n guardada exitosamente en PostgreSQL.` });
   } catch (err) {
