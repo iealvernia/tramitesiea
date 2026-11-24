@@ -2280,6 +2280,68 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
     showToast(`Estado de la evaluación actualizado a: ${newStatus}`);
   };
 
+  const handleAdminResetAnexo6 = (evalId: string) => {
+    const itemToUpdate = evaluaciones.find(item => item.id === evalId);
+    if (!itemToUpdate) return;
+
+    const teacher = docentesEvaluacion.find(e => e.cedula === itemToUpdate.cedula);
+    const teacherName = teacher ? teacher.nombre : itemToUpdate.cedula;
+
+    const confirmReset = window.confirm(
+      `¿Está seguro de reiniciar el Anexo 6 (Evaluación Final) del docente ${teacherName}?\n\n` +
+      `✓ El seguimiento pasará a estado BORRADOR para que el docente pueda volver a diligenciarlo y enviarlo.\n` +
+      `✓ Se reiniciarán las notas de autoevaluación para que pueda realizarlo de nuevo.\n` +
+      `✓ PROTECCIÓN DE DATOS: Los compromisos concertados (Anexo 5) y portafolios (S1, S2, S3) NO se dañarán ni se borrarán.\n\n` +
+      `¿Desea continuar con el reinicio?`
+    );
+
+    if (!confirmReset) return;
+
+    // Reset scores to 0 while keeping all competency definitions, areas, criteria and percentages intact
+    const resetFuncs = (itemToUpdate.compromisosFuncionales || []).map(cf => ({
+      ...cf,
+      puntaje: 0
+    }));
+
+    const resetComps = (itemToUpdate.compromisosComportamentales || []).map(cc => ({
+      ...cc,
+      puntaje: 0
+    }));
+
+    const newHistory = [
+      ...(itemToUpdate.historialRetroalimentacion || []),
+      {
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'hist_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9),
+        anexo: 'Anexo 6',
+        autor: 'Evaluador',
+        fecha: new Date().toISOString(),
+        mensaje: 'El evaluador ha reiniciado el Anexo 6 para que el docente pueda realizarlo nuevamente.'
+      }
+    ];
+
+    const updatedEval: Evaluacion1278 = {
+      ...itemToUpdate,
+      estado: 'Borrador',
+      compromisosFuncionales: resetFuncs,
+      compromisosComportamentales: resetComps,
+      evalDiasValorados: 0,
+      evalDiasIncapacidad: 0,
+      evalCompetenciasMejorar: '',
+      evalEstrategiasMejorar: '',
+      historialRetroalimentacion: newHistory,
+      updatedAt: new Date().toISOString()
+    };
+
+    setEvaluaciones(prev => prev.map(item => item.id === evalId ? updatedEval : item));
+
+    if (selectedEvalForInspection && selectedEvalForInspection.id === evalId) {
+      setSelectedEvalForInspection(updatedEval);
+    }
+
+    syncEvaluacionesToPostgres(updatedEval);
+    showToast(`✓ Anexo 6 reiniciado exitosamente para ${teacherName}. Se encuentra ahora en estado Borrador.`);
+  };
+
   const handleAdminDeleteEvaluation = async (evalId: string) => {
     if (!window.confirm('¿Está seguro que desea eliminar completamente este registro de evaluación? Esta acción borrará los datos falsos y no se puede deshacer.')) return;
     
@@ -7006,16 +7068,27 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     Anexo 2 (Evidencias)
                   </button>
                   {isS4 && (
-                    <button
-                      onClick={() => {
-                        const emp = docentesEvaluacion.find(e => e.cedula === selectedEvalForInspection.cedula);
-                        if (emp) handleExportWordAnexo6(selectedEvalForInspection, emp);
-                      }}
-                      className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Descargar Anexo 6 (Evaluación Final)
-                    </button>
+                    <>
+                      <button
+                        onClick={() => {
+                          const emp = docentesEvaluacion.find(e => e.cedula === selectedEvalForInspection.cedula);
+                          if (emp) handleExportWordAnexo6(selectedEvalForInspection, emp);
+                        }}
+                        className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Descargar Anexo 6 (Evaluación Final)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAdminResetAnexo6(selectedEvalForInspection.id)}
+                        className="py-1.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                        title="Reiniciar Anexo 6 para que el docente pueda volver a realizarlo desde cero"
+                      >
+                        <RefreshCcw className="w-3.5 h-3.5 text-amber-600" />
+                        Reiniciar Anexo 6
+                      </button>
+                    </>
                   )}
                   {selectedEvalForInspection.estado === 'Aprobado' && (
                     <button
@@ -7541,14 +7614,23 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       </div>
                     </div>
                     
-                    <div className="flex justify-end pt-2">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAdminResetAnexo6(selectedEvalForInspection.id)}
+                        className="w-full sm:w-auto py-2 px-3.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                        title="Reiniciar Anexo 6 para que el docente vuelva a diligenciarlo de nuevo"
+                      >
+                        <RefreshCcw className="w-3.5 h-3.5 text-amber-700" />
+                        Reiniciar Anexo 6 para Docente
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
                           syncEvaluacionesToPostgres(selectedEvalForInspection);
                           showToast('✓ Cambios en Evaluación Final (Anexo 6) guardados exitosamente en la base de datos.');
                         }}
-                        className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                        className="w-full sm:w-auto py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                       >
                         <Save className="w-3.5 h-3.5" />
                         Guardar Cambios Anexo 6
@@ -8074,7 +8156,19 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     <Trash2 className="w-4 h-4" />
                   </button>
 
-                  {selectedEvalForInspection.estado === 'Aprobado' && (
+                  {isS4 && (
+                    <button
+                      type="button"
+                      onClick={() => handleAdminResetAnexo6(selectedEvalForInspection.id)}
+                      className="py-2 px-3.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      title="Reiniciar Anexo 6 para que el docente vuelva a realizar su evaluación desde cero"
+                    >
+                      <RefreshCcw className="w-3.5 h-3.5 text-amber-700" />
+                      Reiniciar Anexo 6 (Borrador)
+                    </button>
+                  )}
+
+                  {!isS4 && selectedEvalForInspection.estado === 'Aprobado' && (
                     <button
                       onClick={() => {
                         if (window.confirm(`¿Desea reabrir o desbloquear el Seguimiento ${selectedEvalForInspection.periodo} para que el docente pueda subir o actualizar evidencias? La información y portafolios actuales no se borrarán.`)) {
