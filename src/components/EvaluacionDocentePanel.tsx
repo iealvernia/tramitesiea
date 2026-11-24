@@ -6914,7 +6914,9 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
       )}
 
       {/* --- ADMIN INSPECTION MODAL --- */}
-      {selectedEvalForInspection && (
+      {selectedEvalForInspection && (() => {
+        const isS4 = Number(selectedEvalForInspection.periodo) === 4 || String(selectedEvalForInspection.periodo).includes('4');
+        return (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center z-50 p-4" id="admin-inspection-modal-backdrop">
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
@@ -6927,7 +6929,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
               <div className="flex items-center gap-2">
                 <Award className="w-5 h-5 text-blue-400" />
                 <h3 className="font-bold text-base leading-none">
-                  Revisión Individual: {Number(selectedEvalForInspection.periodo) === 1 ? 'Seguimiento 1 (Concertación)' : `Seguimiento ${selectedEvalForInspection.periodo} (Evidencias y Portafolio)`}
+                  Revisión Individual: {Number(selectedEvalForInspection.periodo) === 1 ? 'Seguimiento 1 (Concertación)' : isS4 ? 'Seguimiento 4 (Evaluación Final - Anexo 6)' : `Seguimiento ${selectedEvalForInspection.periodo} (Evidencias y Portafolio)`}
                 </h3>
               </div>
               <button
@@ -6955,7 +6957,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                 <div>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider leading-none">Seguimiento:</p>
                   <p className="text-sm font-bold text-blue-600 mt-1 uppercase">
-                    {selectedEvalForInspection.periodo === 1 ? 'Seguimiento 1 (Concertación)' : `Seguimiento ${selectedEvalForInspection.periodo} (Evidencia ${selectedEvalForInspection.periodo})`}
+                    {Number(selectedEvalForInspection.periodo) === 1 ? 'Seguimiento 1 (Concertación)' : isS4 ? 'Seguimiento 4 (Evaluación Final - Anexo 6)' : `Seguimiento ${selectedEvalForInspection.periodo} (Evidencia ${selectedEvalForInspection.periodo})`}
                   </p>
                 </div>
                 <div>
@@ -7003,7 +7005,7 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     <Download className="w-3.5 h-3.5" />
                     Anexo 2 (Evidencias)
                   </button>
-                  {Number(selectedEvalForInspection.periodo) === 4 && (
+                  {isS4 && (
                     <button
                       onClick={() => {
                         const emp = docentesEvaluacion.find(e => e.cedula === selectedEvalForInspection.cedula);
@@ -7055,7 +7057,8 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                   )}
                 </div>
 
-                {/* Date/Time/Place adjusting controls for Admin */}
+                {/* Date/Time/Place adjusting controls for Admin (Only for non-S4) */}
+                {!isS4 && (
                 <div className="w-full mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Ajustes de Fecha, Hora y Lugar de Concertación (para el Acta de Word):</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -7102,10 +7105,11 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                     </div>
                   </div>
                 </div>
+                )}
               </div>
 
               {/* S4 (Anexo 6): Panel de Revisión de Evaluación Final para Rector */}
-              {Number(selectedEvalForInspection.periodo) === 4 ? (
+              {isS4 ? (
                 <div className="space-y-6">
                   {/* Resumen de Calificación Final */}
                   {(() => {
@@ -8120,7 +8124,8 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
             </div>
           </motion.div>
         </div>
-      )}
+        );
+      })()}
 
       {/* CRITERIA SELECTOR MODAL */}
       {activeCriteriaSelectorIndex !== null && (
