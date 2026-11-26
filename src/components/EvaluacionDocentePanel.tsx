@@ -48,6 +48,18 @@ import { supabase } from '../lib/supabase';
 import { generarActaGeneralWord } from '../utils/actaGeneralGenerator';
 import { generarAnexo6Word } from '../utils/exportAnexo6';
 import { calcularDiasValorados } from '../utils/colombiaHolidays';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  ReferenceLine,
+  LabelList
+} from 'recharts';
 
 // Define structures for Decree 1278 Evaluation
 interface FeedbackEntry {
@@ -2340,6 +2352,156 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
 
     syncEvaluacionesToPostgres(updatedEval);
     showToast(`✓ Anexo 6 reiniciado exitosamente para ${teacherName}. Se encuentra ahora en estado Borrador.`);
+  };
+
+  // Render live "III. Perfil de Competencias del Docente" bar chart + per-area breakdown
+  const renderPerfilCompetenciasChart = (evalTarget: Evaluacion1278) => {
+    const funcs = evalTarget.compromisosFuncionales || [];
+    const comps = evalTarget.compromisosComportamentales || [];
+
+    const calcArea = (areaName: string) => {
+      const items = funcs.filter(c => c.area === areaName);
+      const pct = items.reduce((acc, cf) => acc + (cf.porcentaje !== undefined ? Number(cf.porcentaje) : (areaName === 'Académica' ? 12.5 : 5.0)), 0);
+      const pond = items.reduce((acc, cf) => {
+        const peso = cf.porcentaje !== undefined ? Number(cf.porcentaje) : (areaName === 'Académica' ? 12.5 : 5.0);
+        return acc + ((Number(cf.puntaje) || 0) * (peso / 100));
+      }, 0);
+      const prom = pct > 0 ? pond / (pct / 100) : 0;
+      return { pct, prom, pond };
+    };
+
+    const acad = calcArea('Académica');
+    const admin = calcArea('Administrativa');
+    const comun = calcArea('Comunitaria');
+    const subtotalFunc = Math.round((acad.pond + admin.pond + comun.pond) * 10) / 10;
+
+    const compAvg = comps.length > 0
+      ? comps.reduce((acc, cc) => acc + (Number(cc.puntaje) || 0), 0) / comps.length
+      : 0;
+    const compPond = Math.round((compAvg * 0.30) * 10) / 10;
+    const totalFinal = Math.round((subtotalFunc + compPond) * 10) / 10;
+
+    const shorten = (s: string) => {
+      if (!s) return '';
+      return s.length > 22 ? s.slice(0, 20) + '…' : s;
+    };
+
+    const chartData = [
+      ...funcs.map(cf => ({
+        name: shorten(cf.competencia),
+        fullName: cf.competencia,
+        puntaje: Number(cf.puntaje) || 0,
+        grupo: `Funcional (${cf.area})`
+      })),
+      ...comps.map((cc, idx) => ({
+        name: shorten(cc.competencia || `Comportamental ${idx + 1}`),
+        fullName: cc.competencia || `Comportamental ${idx + 1}`,
+        puntaje: Number(cc.puntaje) || 0,
+        grupo: 'Comportamental (30%)'
+      })),
+      {
+        name: 'Puntaje final',
+        fullName: 'Puntaje Total Final (100%)',
+        puntaje: totalFinal,
+        grupo: 'Total'
+      }
+    ];
+
+    return (
+      <div className="space-y-4 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+          <div>
+            <h5 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">
+              III. Perfil de Competencias del Docente
+            </h5>
+            <p className="text-[11px] text-slate-500">
+              Visualización gráfica de calificaciones por competencia funcional, comportamental y puntaje final.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
+            <span className="flex items-center gap-1 text-blue-700"><span className="w-2.5 h-2.5 rounded-xs bg-[#2563eb] inline-block" /> Funcionales</span>
+            <span className="flex items-center gap-1 text-indigo-700"><span className="w-2.5 h-2.5 rounded-xs bg-[#6366f1] inline-block" /> Comportamentales</span>
+            <span className="flex items-center gap-1 text-slate-800"><span className="w-2.5 h-2.5 rounded-xs bg-[#0f172a] inline-block" /> Final</span>
+            <span className="flex items-center gap-1 text-rose-700"><span className="w-2.5 h-2.5 rounded-xs bg-[#e11d48] inline-block" /> &lt; 60</span>
+          </div>
+        </div>
+
+        {/* Desglose por Área de Gestión (idéntico al Anexo 6 oficial) */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+            <div className="text-[10px] font-extrabold text-slate-500 uppercase">Académica ({acad.pct.toFixed(0)}%)</div>
+            <div className="flex items-baseline justify-between mt-1">
+              <span className="text-xs font-bold text-slate-700">Prom: <strong>{acad.prom.toFixed(1)}</strong></span>
+              <span className="text-xs font-black text-blue-700">Pond: {acad.pond.toFixed(1)}</span>
+            </div>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+            <div className="text-[10px] font-extrabold text-slate-500 uppercase">Administrativa ({admin.pct.toFixed(0)}%)</div>
+            <div className="flex items-baseline justify-between mt-1">
+              <span className="text-xs font-bold text-slate-700">Prom: <strong>{admin.prom.toFixed(1)}</strong></span>
+              <span className="text-xs font-black text-blue-700">Pond: {admin.pond.toFixed(1)}</span>
+            </div>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+            <div className="text-[10px] font-extrabold text-slate-500 uppercase">Comunitaria ({comun.pct.toFixed(0)}%)</div>
+            <div className="flex items-baseline justify-between mt-1">
+              <span className="text-xs font-bold text-slate-700">Prom: <strong>{comun.prom.toFixed(1)}</strong></span>
+              <span className="text-xs font-black text-blue-700">Pond: {comun.pond.toFixed(1)}</span>
+            </div>
+          </div>
+          <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-2.5">
+            <div className="text-[10px] font-extrabold text-blue-800 uppercase">Subtotal Func. (70%)</div>
+            <div className="flex items-baseline justify-between mt-1">
+              <span className="text-xs font-bold text-blue-900">Pond. Total:</span>
+              <span className="text-sm font-black text-blue-700">{subtotalFunc.toFixed(1)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="w-full h-72 pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 20, right: 12, left: -12, bottom: 75 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+              <XAxis
+                dataKey="name"
+                angle={-45}
+                textAnchor="end"
+                interval={0}
+                tick={{ fontSize: 10, fill: '#334155', fontWeight: 600 }}
+                height={80}
+              />
+              <YAxis
+                domain={[0, 100]}
+                ticks={[0, 20, 40, 60, 80, 90, 100]}
+                tick={{ fontSize: 10, fill: '#64748b', fontWeight: 600 }}
+              />
+              <Tooltip
+                formatter={(value: any) => [`${Number(value).toFixed(1)} pts`, 'Puntaje']}
+                labelFormatter={(_label, payload) => payload?.[0]?.payload?.fullName || _label}
+                contentStyle={{ fontSize: '12px', borderRadius: '10px', border: '1px solid #cbd5e1' }}
+              />
+              <ReferenceLine y={60} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: '60 Satisf.', position: 'insideTopRight', fontSize: 9, fill: '#b45309' }} />
+              <ReferenceLine y={90} stroke="#10b981" strokeDasharray="4 4" label={{ value: '90 Sobres.', position: 'insideTopRight', fontSize: 9, fill: '#047857' }} />
+              <Bar dataKey="puntaje" radius={[4, 4, 0, 0]} maxBarSize={36}>
+                {chartData.map((entry, idx) => {
+                  let fill = '#2563eb';
+                  if (entry.puntaje > 0 && entry.puntaje < 60) fill = '#e11d48';
+                  else if (entry.grupo === 'Total') fill = '#0f172a';
+                  else if (entry.grupo.startsWith('Comportamental')) fill = '#6366f1';
+                  return <Cell key={`cell-${idx}`} fill={fill} />;
+                })}
+                <LabelList
+                  dataKey="puntaje"
+                  position="top"
+                  formatter={(v: any) => Number(v) > 0 ? Number(v).toFixed(0) : ''}
+                  style={{ fontSize: 10, fontWeight: 700, fill: '#1e293b' }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
   };
 
   const handleAdminDeleteEvaluation = async (evalId: string) => {
@@ -6451,6 +6613,9 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       </div>
                     </div>
                     
+                    {/* III. Perfil de Competencias del Docente (Gráfica en vivo) */}
+                    {renderPerfilCompetenciasChart(activeEvaluacion)}
+
                     {/* Additional Dates & Plan */}
                     <div className="space-y-4 bg-slate-50 p-4 border border-slate-200 rounded-xl">
                        <h5 className="font-bold text-slate-800 border-b border-slate-200 pb-2">Datos Complementarios y Plan de Desarrollo</h5>
@@ -7345,6 +7510,9 @@ export const EvaluacionDocentePanel: React.FC<EvaluacionDocentePanelProps> = ({
                       </table>
                     </div>
                   </div>
+
+                  {/* III. Perfil de Competencias del Docente (Gráfica en vivo) */}
+                  {renderPerfilCompetenciasChart(selectedEvalForInspection)}
 
                   {/* Datos Complementarios y Plan de Desarrollo */}
                   <div className="space-y-4 bg-slate-50 p-4 border border-slate-200 rounded-xl">
